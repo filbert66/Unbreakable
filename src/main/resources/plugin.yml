@@ -1,0 +1,7 @@
+# 06 Dec 2013 : PSW : New
+
+name: Unbreakable
+main: com.yahoo.phil_work.unbreakable.Unbreakable
+version: 0.1
+authors: [filber66]
+description: Stops armor and tools from breaking
