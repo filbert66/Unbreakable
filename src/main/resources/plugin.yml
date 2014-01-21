@@ -1,7 +1,25 @@
 # 06 Dec 2013 : PSW : New
+# 21 Jan 2014 : PSW : Added permissions; corrected typo in username (doh!)
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 0.3
-authors: [filber66]
+version: 0.6
+authors: [filbert66]
 description: Stops armor and tools from breaking
+
+permissions:
+  unbreakable.*:
+    description: Gives access to ALL unbreakable features
+    children:
+      unbreakable.armor: true
+      unbreakable.tools: true
+      unbreakable.weapons: true
+  unbreakable.armor:
+    description: Protects this user's armor as unbreakable
+    default: true
+  unbreakable.weapons:
+    description: Protects this user's weapons as unbreakable
+    default: true
+  unbreakable.tools:
+    description: Protects this user's tools as unbreakable
+    default: true

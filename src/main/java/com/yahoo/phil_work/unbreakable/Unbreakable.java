@@ -1,3 +1,10 @@
+/***
+ * File Unbreakable.java
+ * 
+ * History:
+ *  21 Jan 2014 : Adding permissions checks
+ */
+
 package com.yahoo.phil_work.unbreakable;
 
 import java.util.logging.Logger;
@@ -115,22 +122,38 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		
 		newItem.setAmount (1);
 			
-		// Find that item in player's hand or armor
-		if (newItem.isSimilar(inventory.getItemInHand())) {
-			if ((isWeapon (newItem.getType()) && !getConfig().getBoolean ("Protect weapons")) ||
-				!getConfig().getBoolean ("Protect tools") ) {
+		// Find that item in player's hand or armor and check config & permissions
+		if (newItem.isSimilar(inventory.getItemInHand())) 
+		{
+			final boolean isWeapon = isWeapon (newItem.getType());
+			
+			if ((isWeapon && !getConfig().getBoolean ("Protect weapons")) || 
+				(!isWeapon && !getConfig().getBoolean ("Protect tools")) ) 
+			{
 				log.config ("Not configured to protect a " + newItem.getType());
+				return;
+			}
+			else if (isWeapon && player.isPermissionSet ("unbreakable.weapons") && !player.hasPermission ("unbreakable.weapons")) {
+				log.info (player.getName() + " doesn't have unbreakable.weapons");
+				return;
+			}
+			else if (!isWeapon && player.isPermissionSet ("unbreakable.tools") && !player.hasPermission ("unbreakable.tools")) {
+				log.info (player.getName() + " doesn't have unbreakable.tools");
 				return;
 			}
 		}
 		// else must be armor
 		else if ( !isArmor (newItem.getType()) || !getConfig().getBoolean ("Protect armor")) {
-			log.config ("Not configured to protect armor " + newItem.getType());
+			log.config ("Not configured to protect armor: " + newItem.getType());
 			return;
-		}		
+		}
+		else if (player.isPermissionSet ("unbreakable.armor") && !player.hasPermission ("unbreakable.armor")) {
+			log.info (player.getName() + " doesn't have unbreakable.armor");
+			return;
+		}
 		
+		// Config & permissions OK
 		{
-			//  Could save item and give back to person after one tick 
 			newItem.setDurability ((short)0); // durability goes from 0(new) to max
 	
 			final ItemStack unbreakableItem = addUnbreakable (newItem);
@@ -180,6 +203,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			// if !hasTag ("Unbreakable"); don't want to do every time, but cost of checking is almost the same.
 			player.setItemInHand (addUnbreakable (held));
 			
+			// But then this shouldn't happen every time either.... Hrmmm.
 			if (getConfig().getBoolean ("Message on making unbreakable"))
 				player.sendMessage ("[Unbreakable] Your " + held.getType() + " is now unbreakable");
 		}		
