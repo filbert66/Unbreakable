@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.Repairable;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerItemBreakEvent;
 import org.bukkit.event.Listener;
@@ -67,7 +68,38 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				return false;
 		}
 	}
-		
+	// Should check BARDING (horse armor) but don't today
+	public static boolean isArmor (Material type) {
+		return isHelmet(type) || isChestplate (type) || isLeggings(type) || isBoots (type);
+	}
+	public static boolean isWeapon (Material type) {
+		switch (type) {
+			case IRON_SWORD:
+			case STONE_SWORD:
+			case GOLD_SWORD: 
+			case DIAMOND_SWORD:
+			case WOOD_SWORD:
+			case BOW:
+				return true;
+			default:
+				return false;
+		}
+	}
+	
+	//returns a COPY of item that has unbreakable tag set
+	private ItemStack addUnbreakable (final ItemStack item) {
+		// NMS hacking begins!
+		// Could use reflection and version "get" to get CraftItemStack class
+		net.minecraft.server.v1_7_R1.ItemStack nms = 
+			org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack.asNMSCopy (item);
+		if ( !nms.hasTag()) {
+			String name = nms.getName();
+			nms.c (name); // creates a tag, too
+		}
+		nms.getTag().setBoolean ("Unbreakable", true); 
+		// end NMS Hacking, but still have version-dependant call next
+		return org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack.asCraftMirror (nms);	
+	}
 
 	@EventHandler (ignoreCancelled = true)
 	void breakMonitor (PlayerItemBreakEvent event) {
@@ -84,28 +116,24 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		newItem.setAmount (1);
 			
 		// Find that item in player's hand or armor
-		// Could add config for each item to be protected. 
-		if (newItem.isSimilar(inventory.getItemInHand()) ||
-			newItem.isSimilar (inventory.getHelmet()) ||
-			newItem.isSimilar (inventory.getLeggings()) ||
-			newItem.isSimilar (inventory.getChestplate()) ||
-			newItem.isSimilar (inventory.getBoots()) )
+		if (newItem.isSimilar(inventory.getItemInHand())) {
+			if ((isWeapon (newItem.getType()) && !getConfig().getBoolean ("Protect weapons")) ||
+				!getConfig().getBoolean ("Protect tools") ) {
+				log.config ("Not configured to protect a " + newItem.getType());
+				return;
+			}
+		}
+		// else must be armor
+		else if ( !isArmor (newItem.getType()) || !getConfig().getBoolean ("Protect armor")) {
+			log.config ("Not configured to protect armor " + newItem.getType());
+			return;
+		}		
+		
 		{
 			//  Could save item and give back to person after one tick 
-			newItem.setDurability (newItem.getType().getMaxDurability());
+			newItem.setDurability ((short)0); // durability goes from 0(new) to max
 	
-			// NMS hacking begins!
-			// Could use reflection and version "get" to get CraftItemStack class
-			net.minecraft.server.v1_7_R1.ItemStack nms = 
-				org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack.asNMSCopy (newItem);
-			if ( !nms.hasTag()) {
-				String name = nms.getName();
-				nms.c (name); // creates a tag, too
-			}
-			nms.getTag().setBoolean ("Unbreakable", true); 
-			// end NMS Hacking, but still have version-dependant call next
-			final ItemStack unbreakableItem = 
-				org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack.asCraftMirror (nms);
+			final ItemStack unbreakableItem = addUnbreakable (newItem);
 
 			class ReplaceRunner extends BukkitRunnable {
 				@Override
@@ -139,6 +167,24 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			log.info ("Saved item " + unbreakableItem.getType() + " for " + player.getName());
 		}
 	}
+	
+	/*** Could do this to avoid the item appearing to break, but is it worth the CPU?
+	**
+	@EventHandler (ignoreCancelled = true)
+	void heldMonitor (PlayerItemHeldEvent event) {
+		Player player = event.getPlayer();
+		ItemStack held = player.getInventory().getItem (event.getNewSlot());
+
+		// if hasPermissions ()
+		if (held.getItemMeta() instanceof Repairable)) {
+			// if !hasTag ("Unbreakable"); don't want to do every time, but cost of checking is almost the same.
+			player.setItemInHand (addUnbreakable (held));
+			
+			if (getConfig().getBoolean ("Message on making unbreakable"))
+				player.sendMessage ("[Unbreakable] Your " + held.getType() + " is now unbreakable");
+		}		
+	}
+	***/
 	
 	public void onEnable()
 	{
