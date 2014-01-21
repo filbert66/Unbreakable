@@ -2,10 +2,9 @@ package com.yahoo.phil_work.unbreakable;
 
 import java.util.logging.Logger;
 
-import org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack; // Version-dependant!!
-
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.meta.Repairable;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerItemBreakEvent;
 import org.bukkit.event.Listener;
@@ -76,7 +75,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		final Player player = event.getPlayer();
 		PlayerInventory inventory = player.getInventory();
 
-		log.info ("Found " + newItem.getType() + " breaking");
+		if ( !(newItem.getItemMeta() instanceof Repairable)) {
+			log.warning ("How could an unrepairable  " + newItem.getType() + " break??");
+			return;
+		} else
+			log.fine ("Found " + newItem.getType() + " breaking");
+		
 		newItem.setAmount (1);
 			
 		// Find that item in player's hand or armor
@@ -89,23 +93,33 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		{
 			//  Could save item and give back to person after one tick 
 			newItem.setDurability (newItem.getType().getMaxDurability());
-			net.minecraft.server.v1_7_R1.ItemStack nms = CraftItemStack.asNMSCopy (newItem);
+	
+			// NMS hacking begins!
+			// Could use reflection and version "get" to get CraftItemStack class
+			net.minecraft.server.v1_7_R1.ItemStack nms = 
+				org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack.asNMSCopy (newItem);
 			if ( !nms.hasTag()) {
 				String name = nms.getName();
 				nms.c (name); // creates a tag, too
 			}
-			nms.getTag().setBoolean ("Unbreakable", true); // only NMS call!
-			final ItemStack unbreakableItem = CraftItemStack.asCraftMirror (nms);
+			nms.getTag().setBoolean ("Unbreakable", true); 
+			// end NMS Hacking, but still have version-dependant call next
+			final ItemStack unbreakableItem = 
+				org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack.asCraftMirror (nms);
 
 			class ReplaceRunner extends BukkitRunnable {
 				@Override
 				public void run() {
 					if (unbreakableItem == null)
 						return;
+					if ( !player.isOnline()) {
+						log.info (player.getName() + " logged off before we could give his unbreakable " + unbreakableItem.getType());
+						return;
+					}
 					Material m = unbreakableItem.getType();
 					PlayerInventory inventory = player.getInventory();
 
-					if (isBoots (m)) 
+					if (isBoots (m)) // check that boots slot is empty
 						inventory.setBoots (unbreakableItem);
 					else if (isChestplate (m))
 						inventory.setChestplate (unbreakableItem);
@@ -115,12 +129,14 @@ public class Unbreakable extends JavaPlugin implements Listener {
 						inventory.setHelmet (unbreakableItem);
 					else // was similar to ItemInHand
 						inventory.setItemInHand (unbreakableItem);
-					player.sendMessage ("[Unbreakable]Your " + unbreakableItem.getType() + " is now unbreakable");
+						
+					if (getConfig().getBoolean ("Message on making unbreakable"))
+						player.sendMessage ("[Unbreakable] Your " + unbreakableItem.getType() + " is now unbreakable");
 				}
 			}
 			(new ReplaceRunner()).runTaskLater(this, 1);	// one tic should be long enough to destroy item
 			
-			log.info ("Saved item " + unbreakableItem.getType());
+			log.info ("Saved item " + unbreakableItem.getType() + " for " + player.getName());
 		}
 	}
 	

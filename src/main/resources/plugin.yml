@@ -2,6 +2,6 @@
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 0.1
+version: 0.2
 authors: [filber66]
 description: Stops armor and tools from breaking
