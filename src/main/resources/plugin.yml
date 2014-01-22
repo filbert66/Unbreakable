@@ -1,11 +1,14 @@
 # 06 Dec 2013 : PSW : New
 # 21 Jan 2014 : PSW : Added permissions; corrected typo in username (doh!)
+# 22 Jan 2014 : PSW : Added softdepend, website
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 0.6
-authors: [filbert66]
+version: 0.7
+author: filbert66
 description: Stops armor and tools from breaking
+softdepend: [LanguagesAPI]
+website: dev.bukkit.org/bukkit-plugins/unbreakableitems
 
 permissions:
   unbreakable.*:
