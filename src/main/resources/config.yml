@@ -1,5 +1,10 @@
 Message on making unbreakable: true
+Message on enchant cancel: true
+Message on enchant: false
 
 Protect armor: true
 Protect tools: true
 Protect weapons: true
+
+Anvil enchant delay sec: 5
+Anvil enchant cost: 8
