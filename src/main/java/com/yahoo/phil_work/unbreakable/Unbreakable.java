@@ -223,6 +223,27 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		return item;	
 	}
 
+	// Add unbreakable to the book
+	private ItemStack storeUnbreakable (ItemStack item) {
+		if (item.getType() != Material.ENCHANTED_BOOK)
+			return addUnbreakable (item);
+
+		item.addUnsafeEnchantment (Enchantment.getById (UNBREAKABLE.id), 1);
+		ItemMeta enchStore = item.getItemMeta();
+		String[] Lore = {"storing 'Unbreakable'", 
+			"will auto-enchant after " + getConfig().getInt ("Anvil enchant delay sec") +"s when", 
+			"in anvil with Repairable", 
+			"enchant cost: " + getConfig().getInt ("Anvil enchant cost") };
+		enchStore.setLore (java.util.Arrays.asList (Lore));
+		/* Causing client to crash; can't find name? So using addUnsafeEnchant()
+		 * enchStore.addStoredEnchant (Enchantment.getById (UNBREAKABLE.id), 1, false);
+		 */
+		if ( !item.setItemMeta (enchStore))
+			log.warning ("failed to set itemMeta on book");
+		item = addUnbreakable (item); // is being lost when moving
+		return item;
+	}
+	
 	@EventHandler (ignoreCancelled = true)
 	void breakMonitor (PlayerItemBreakEvent event) {
 		ItemStack newItem = event.getBrokenItem().clone();
@@ -330,6 +351,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (item.getType() == Material.BOOK)
 			item.setType (Material.ENCHANTED_BOOK);
 		boolean added = false;
+		
+		if ( !player.hasPermission ("unbreakable.ench"))
+			return;
 
 		for (Enchantment ench : event.getEnchantsToAdd().keySet()) {
 			if (item.getType()== Material.ENCHANTED_BOOK) {
@@ -338,20 +362,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				// Decide whether or not to change the enchantment on the book to mine...			
 				if (UNBREAKABLE.getIfNextEnchantUnbreakable (levels)) {
 					added = true;
-					item.addUnsafeEnchantment (Enchantment.getById (UNBREAKABLE.id), 1);
-					
-					ItemMeta enchStore = item.getItemMeta();
-					String[] Lore = {"storing 'Unbreakable'", 
-						"will auto-enchant after " + getConfig().getInt ("Anvil enchant delay sec") +"s when", 
-						"in anvil with Repairable", 
-						"enchant cost: " + getConfig().getInt ("Anvil enchant cost") };
-					enchStore.setLore (java.util.Arrays.asList (Lore));
-					/* Causing client to crash; can't find name?
-					 * enchStore.addStoredEnchant (Enchantment.getById (UNBREAKABLE.id), 1, false);
-					 */
-					if ( !item.setItemMeta (enchStore))
-						log.warning ("failed to set itemMeta on book");
-					item = addUnbreakable (item); // is being lost when moving
+					item = storeUnbreakable (item);
 					event.setExpLevelCost (UNBREAKABLE.getMinXP (1));
 					break;  // only one enchant, but what if this was second??
 				} /** Already getting added by NMS;
@@ -363,7 +374,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				item.addEnchantment (ench, event.getEnchantsToAdd().get(ench));
 			
 			if (ench.getId() == UNBREAKABLE.id || added) {
-				// Bukkit not adding Lore so just do it manually
 				item = addUnbreakable (item);
 				added = true;
 			}
@@ -375,13 +385,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		}
 	}
 
-	boolean deductXP (final Player player) {
-		if (player.getLevel() < UNBREAKABLE.getMinXP(1) ) {
+	boolean hasAndDeductXP (final Player player, int levels) {
+		if (player.getLevel() < levels) {
 			player.sendMessage (language.get (player, "needXP", chatName + ": Insufficient XP"));
 			return false;
 		}  
 		else {
-			player.setLevel (player.getLevel() - UNBREAKABLE.getMinXP(1));
+			player.setLevel (player.getLevel() - levels);
 			return true;
 		}	
 	}
@@ -447,7 +457,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					log.warning (human + " clicked on anvil, not a Player");
 					return;
 				}
-
+				else if ( !player.hasPermission ("unbreakable.anvil")) {
+					player.sendMessage (language.get (player, "noPerm", 
+										"You don't have permission to enchant with " + chatName + " books"));
+					return;
+				}
+				
 				class EnchantRunner extends BukkitRunnable {
 					@Override
 					public void run() {
@@ -484,7 +499,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 								player.sendMessage (language.get (player, "cancel", "Unbreakable enchant cancelled"));
 							return;
 						}
-						if (player.getGameMode() != org.bukkit.GameMode.CREATIVE && !deductXP (player))
+						if (player.getGameMode() != org.bukkit.GameMode.CREATIVE && !hasAndDeductXP (player, getConfig().getInt ("Anvil enchant cost")))
 							return;
 							
 						// Execute enchant
@@ -518,11 +533,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		language = new LanguageWrapper(this, "eng"); // English locale
 		saveResource ("languages/lang-eng.yml", /*overwrite=*/false);
 		
-		if (this.getServer().getBukkitVersion().equals ("1.7.2-R0.2")) {
+		if (this.getServer().getBukkitVersion().startsWith ("1.7.2-R0.")) {
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
 		} else
-			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with 1.7.2-R0.2 (today)"));
+			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with 1.7.2-R0.2/3 (today)"));
 	}
 	
 	public void onDisable()
@@ -542,14 +557,19 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			Player player = (Player)sender;
 			ItemStack inHand = player.getInventory().getItemInHand();
 			if (inHand == null || !(inHand.getItemMeta() instanceof Repairable)) {
+			// repairable check not working
 				player.sendMessage (language.get (player, "needItem", chatName + ": Need a repairable item in hand"));
 				return false;
 			}
 			if (player.getGameMode() != org.bukkit.GameMode.CREATIVE) {
-				if ( !deductXP(player))
+				if ( !hasAndDeductXP(player, UNBREAKABLE.getMinXP(1))) 
 					return false;
 			}
 			// check for book
+			if (inHand.getType() == Material.BOOK) {
+				inHand.setType (Material.ENCHANTED_BOOK);
+				inHand = storeUnbreakable (inHand);
+			}
 			player.sendMessage (language.get (player, "saved", chatName + ": Your {0} is now unbreakable", inHand.getType()));
 			player.getInventory().setItemInHand (addUnbreakable (inHand));
 			return true;
