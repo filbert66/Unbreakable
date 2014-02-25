@@ -18,6 +18,41 @@ public class UnbreakableEnch extends Enchantment {
 		this.b ("Unbreakable"); // setName
 	}
 	
+	public static boolean alreadyRegistered (int id) {
+	  Enchantment e = Enchantment.byId [id];
+	  return e != null && e.a().endsWith ("Unbreakable");
+	}
+	// ONLY call if alreadyRegistered() == true
+	public static void clearOldUnbreakable (int id) {
+		// Clear static final arrays if already set (i.e. on reload)
+		try {
+			Field byIdField = Enchantment.class.getDeclaredField("byId");
+			Field cField = Enchantment.class.getDeclaredField("c");
+ 
+			byIdField.setAccessible(true);
+			cField.setAccessible(true);
+ 
+			@SuppressWarnings("unchecked")
+			Enchantment[] byId = (Enchantment[] ) byIdField.get(null);
+			@SuppressWarnings("unchecked")
+			Enchantment[]  c = (Enchantment[] ) cField.get(null);
+ 
+			if (byId [id] != null) {
+				Enchantment tmp = byId [id];			
+				byId[id] = null;
+				System.out.println ("Unbreakable: cleaned up NMS.Enchantment.byId....");			    
+
+				for (int i = 0; i < c.length; i++) 
+				  if (c [i].id == tmp.id) {
+				  	c [i] = null;
+					System.out.println ("Unbreakable: cleaned up NMS.Enchantment.c....");			    
+				  	break;
+				  }
+			  }
+		} catch (Exception ignored) {
+			System.err.println ("Unbreakable: cannot clear old enchantment; suggest server restart");		
+	    }
+	}
 	// expected to be called by static section of instantiator
 	public void updateAnvilList () {
 		// simulate static init of c[]; it's used for book enchanting
@@ -25,6 +60,7 @@ public class UnbreakableEnch extends Enchantment {
 			Field f = Enchantment.class.getDeclaredField("c");
 			f.setAccessible(true);
 			
+			@SuppressWarnings("unchecked")
 	        ArrayList<Enchantment> arraylist = new ArrayList();
         	Enchantment[] aenchantment = super.byId;
         	int i = aenchantment.length;
@@ -39,7 +75,7 @@ public class UnbreakableEnch extends Enchantment {
 			}
 			this.c = (Enchantment[]) arraylist.toArray(new Enchantment[0]);
 			
-			System.out.println ("inserted UnbreakableEnch into c[" + this.c.length + "] for anvils");
+			System.out.println ("UnbreakableEnch will have 1:" + this.c.length + " chance when enough XP");
 		} catch (NoSuchFieldException ex) {
 			System.err.println ("Unbreakable: cannot get NMS.Enchantment.c[]");
 /**
@@ -118,28 +154,6 @@ public class UnbreakableEnch extends Enchantment {
 		// System.out.println ("UnbreakableEnch.b(" + i + ")");
 		return super.a(i) + 50;
 	}
- 
- /** 
-  
-try {
-Field byIdField = Enchantment.class.getDeclaredField("byId");
-Field byNameField = Enchantment.class.getDeclaredField("byName");
- 
-byIdField.setAccessible(true);
-byNameField.setAccessible(true);
- 
-@SuppressWarnings("unchecked")
-HashMap<Integer, Enchantment> byId = (HashMap<Integer, Enchantment>) byIdField.get(null);
-@SuppressWarnings("unchecked")
-HashMap<String, Enchantment> byName = (HashMap<String, Enchantment>) byNameField.get(null);
- 
-if(byId.containsKey(id))
-byId.remove(id);
- 
-if(byName.containsKey(getName()))
-byName.remove(getName());
-} catch (Exception ignored) { }
- ***/
  
 }
  

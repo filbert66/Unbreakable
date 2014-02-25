@@ -2,10 +2,11 @@
 # 21 Jan 2014 : PSW : Added permissions; corrected typo in username (doh!)
 # 22 Jan 2014 : PSW : Added softdepend, website
 # 20 Feb 2014 : PSW : Added unbreakable command
+# 23 Feb 2014 : PSW : Split out unbreakable.anvil from .ench
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 0.8
+version: 0.9.2
 author: filbert66
 description: Stops armor and tools from breaking
 softdepend: [LanguagesAPI]
@@ -20,6 +21,7 @@ permissions:
       unbreakable.weapons: true
       unbreakable.cmd: true
       unbreakable.ench: true
+      unbreakable.anvil: true
   unbreakable.armor:
     description: Auto protect this user's armor as unbreakable
     default: true
@@ -33,7 +35,10 @@ permissions:
     description: Allows enchanting held item with Unbreakable by command
     default: op
   unbreakable.ench:
-    description: Allows enchanting held item with Unbreakable by Enchant table or anvil
+    description: Allows enchanting item with Unbreakable on Enchant table 
+    default: true
+  unbreakable.anvil:
+    description: Allows enchanting an item with an Unbreakable book on anvil
     default: true
 
 commands:
