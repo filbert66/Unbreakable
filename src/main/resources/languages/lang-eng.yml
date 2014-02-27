@@ -8,3 +8,7 @@ saved: §9Unbreakable§r: Your {0} is now unbreakable
 enchanted: {0} just enchanted a {1} with UNBREAKABLE
 cancel: Unbreakable enchant cancelled
 needXP: §9Unbreakable§r: Insufficient XP
+bookLore1: storing 'Unbreakable'
+bookLore2: will auto-enchant after {0}s when
+bookLore3: in anvil with Repairable
+bookLore4: enchant cost: {0}

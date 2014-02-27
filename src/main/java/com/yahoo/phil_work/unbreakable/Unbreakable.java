@@ -9,6 +9,10 @@
  *  18 Feb 2014 : Added unbreakable command
  *  24 Feb 2014 : Removed DEBUG log.info() calls; added isTool(); 
  *              : Deal w reload
+ *  25 Feb 2014 : Add write of default config; added addNewLanguages(); avoid anvil crash
+ *              : Added book lore to language strings.
+ *              : Make table ench rarer w 2 weight; now 5/27 when using 28 levels
+ *              : use canApplyTogether() to avoid wasting Unbreaking/Unbreakable
  */
 
 package com.yahoo.phil_work.unbreakable;
@@ -16,13 +20,15 @@ package com.yahoo.phil_work.unbreakable;
 import com.yahoo.phil_work.unbreakable.UnbreakableEnch;
 import com.yahoo.phil_work.LanguageWrapper;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.logging.Logger;
-
+import java.io.File;
+import java.io.FileInputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.List;
+import java.util.logging.Logger;
+import java.util.zip.*;
 import java.util.HashMap;
 
 import org.bukkit.Bukkit;
@@ -58,6 +64,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	private LanguageWrapper language;
     public String chatName;
     static final int UB_ID = 144;
+    // can't make below configurable bcs it is initialized before loading plugin
+    static final int UB_Weight = 2; // scale of 1-10, 1 being rarest, like thorns, silk    
     
  	static {
  		try {
@@ -101,7 +109,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				clearOBStatics();
 				UnbreakableEnch.clearOldUnbreakable(UB_ID); // clear NMS statics
 			}
-			UNBREAKABLE = new UnbreakableEnch (UB_ID, 4);
+			UNBREAKABLE = new UnbreakableEnch (UB_ID, UB_Weight);
 		} catch (IllegalArgumentException ex) {
 		      System.err.println ("Unbreakable: duplicate enchantment id! (" + UB_ID + ")");
 		      ex.printStackTrace();
@@ -267,16 +275,16 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	}
 
 	// Add unbreakable to the book
-	private ItemStack storeUnbreakable (ItemStack item) {
+	private ItemStack storeUnbreakable (Player p, ItemStack item) {
 		if (item.getType() != Material.ENCHANTED_BOOK)
 			return addUnbreakable (item);
 
 		item.addUnsafeEnchantment (Enchantment.getById (UB_ID), 1);
 		ItemMeta enchStore = item.getItemMeta();
-		String[] Lore = {"storing 'Unbreakable'", 
-			"will auto-enchant after " + getConfig().getInt ("Anvil enchant delay sec") +"s when", 
-			"in anvil with Repairable", 
-			"enchant cost: " + getConfig().getInt ("Anvil enchant cost") };
+		String[] Lore = {language.get (p, "bookLore1", "storing 'Unbreakable'"), 
+			language.get (p, "bookLore2", "will auto-enchant after {0}s when", getConfig().getInt ("Anvil enchant delay sec")),
+			language.get (p, "bookLore3", "in anvil with Repairable"),
+			language.get (p, "bookLore4", "enchant cost: {0}", getConfig().getInt ("Anvil enchant cost")) };
 		enchStore.setLore (java.util.Arrays.asList (Lore));
 		/* Causing client to crash; can't find name? So using addUnsafeEnchant()
 		 * enchStore.addStoredEnchant (Enchantment.getById (UB_ID), 1, false);
@@ -292,19 +300,20 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		ItemStack newItem = event.getBrokenItem().clone();
 		final Player player = event.getPlayer();
 		PlayerInventory inventory = player.getInventory();
+		Material m = event.getBrokenItem().getType();
 
-		if ( !(newItem.getItemMeta() instanceof Repairable)) {
-			log.warning ("How could an unrepairable  " + newItem.getType() + " break??");
+		if ( !(isArmor (m) || isWeapon (m) || isTool (m))) {
+			log.warning ("How could an unrepairable  " + m + " break??");
 			return;
 		} else
-			log.fine ("Found " + newItem.getType() + " breaking");
+			log.fine ("Found " + m + " breaking");
 		
 		newItem.setAmount (1);
 			
 		// Find that item in player's hand or armor and check config & permissions
 		if (newItem.isSimilar(inventory.getItemInHand())) 
 		{
-			final boolean isWeapon = isWeapon (newItem.getType());
+			final boolean isWeapon = isWeapon (m);
 			
 			if ((isWeapon && !getConfig().getBoolean ("Protect weapons")) || 
 				(!isWeapon && !getConfig().getBoolean ("Protect tools")) ) 
@@ -322,7 +331,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}
 		}
 		// else must be armor
-		else if ( !isArmor (newItem.getType()) || !getConfig().getBoolean ("Protect armor")) {
+		else if ( !isArmor (m) || !getConfig().getBoolean ("Protect armor")) {
 			log.config ("Not configured to protect armor: " + newItem.getType());
 			return;
 		}
@@ -398,30 +407,54 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if ( !player.hasPermission ("unbreakable.ench"))
 			return;
 
+		int enchants = 0;
 		for (Enchantment ench : event.getEnchantsToAdd().keySet()) {
+			if (added && !UNBREAKABLE.canApplyTogether (ench.getId())) {
+				//reduce cost somehow. Remove xp levels by ignored enchant level
+				event.setExpLevelCost (event.getExpLevelCost() - event.getEnchantsToAdd().get(ench));
+				continue; // skip if can't add other
+			}
+			
 			if (item.getType()== Material.ENCHANTED_BOOK) {
 				int levels = event.getExpLevelCost(); 
 
 				// Decide whether or not to change the enchantment on the book to mine...			
 				if (UNBREAKABLE.getIfNextEnchantUnbreakable (levels)) {
 					added = true;
-					item = storeUnbreakable (item);
+					item = storeUnbreakable (player, item);
 					event.setExpLevelCost (UNBREAKABLE.getMinXP (1));
 					break;  // only one enchant, but what if this was second??
 				} /** Already getting added by NMS;
 				else
 					item.addUnsafeEnchantment (ench, event.getEnchantsToAdd().get(ench));
 				  **/
-			} else
+			} else if (ench.getId() != UB_ID) {
+			    // adding my enchant works, but if then item placed in enchanting table, it crashes client
 				// add other enchantments to my copy or there are none when I give copy back
 				item.addEnchantment (ench, event.getEnchantsToAdd().get(ench));
+				enchants++;
+			}
 			
+			boolean incompat = false;
 			if (ench.getId() == UB_ID || added) {
-				item = addUnbreakable (item);
-				added = true;
+				if (enchants > 0) { // have another enchant already
+					for (Enchantment e : item.getEnchantments().keySet())
+						if ( !UNBREAKABLE.canApplyTogether (e.getId())) {
+							event.setExpLevelCost (event.getExpLevelCost() -1);
+							incompat = true;
+						}
+				}
+				if ( !incompat) {
+					item = addUnbreakable (item);
+					enchants++;
+					added = true;
+				}
 			}
 		} 
 		if (added) {
+			if (enchants == 1 && item.getType() != Material.ENCHANTED_BOOK)
+				item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if none other enchs
+
 			((EnchantingInventory)event.getInventory()).setItem (item); // unsafe, but we know it's enchantment
 			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
 					  "{0} just enchanted a {1} with UNBREAKABLE", event.getEnchanter().getName(), item.getType() ));
@@ -568,14 +601,48 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	/** Future: Add Invulnerable tag and set boolean in NMS.Entity on ItemSpawnEvent (i.e. dropped) per 
 	https://forums.bukkit.org/threads/indestructible-items-lava.215217/
 	**/
+	
+	private void addNewLanguages () {
+		final String pluginPath = "plugins"+ getDataFolder().separator + getDataFolder().getName() + getDataFolder().separator;
+
+		try {  //iterate through added languages
+			String classURL = this.getClass().getResource(this.getName()+".class").toString();
+			String jarName = classURL.substring (classURL.lastIndexOf (':') + 1, classURL.indexOf ('!'));
+			ZipInputStream jar = new ZipInputStream (new FileInputStream (jarName));
+			if (jar != null) {
+				ZipEntry e = jar.getNextEntry();
+				while (e != null)   {
+					String name = e.getName();
+					if (name.startsWith ("languages/") && !new File (pluginPath + name).exists()) 
+					{
+						saveResource (name, false);
+						log.info ("Adding language file: " + name);
+					}
+					e = jar.getNextEntry();
+				}
+			}
+			else 
+				log.warning ("Unable to open jar file");						
+		} catch (Exception ex) {
+			log.warning ("Unable to process language files: " + ex);		
+		}	
+	}		   
 			
 	public void onEnable()
 	{
 		log = this.getLogger();
 		chatName = ChatColor.BLUE + this.getName() + ChatColor.RESET;
 		language = new LanguageWrapper(this, "eng"); // English locale
-		saveResource ("languages/lang-eng.yml", /*overwrite=*/false);
-		
+		final String pluginPath = "plugins"+ getDataFolder().separator + getDataFolder().getName() + getDataFolder().separator;
+
+		if ( !getDataFolder().exists() || !(new File (pluginPath + "config.yml").exists()) )
+		{
+			getConfig().options().copyDefaults(true);
+			log.info ("No config found in " + pluginPath + "; writing defaults");
+			saveDefaultConfig();
+		}
+		addNewLanguages();		
+
 		if (UNBREAKABLE == null)
 			return;
 			
@@ -588,6 +655,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	
 	public void onDisable()
 	{
+		clearOBStatics();
+		UnbreakableEnch.clearOldUnbreakable(UB_ID); // clear NMS statics
 	}
 	
 	@Override
@@ -617,7 +686,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			ItemStack newItem = inHand.clone();
 			if (m == Material.BOOK) {
 				newItem.setType (Material.ENCHANTED_BOOK);
-				newItem = storeUnbreakable (newItem);
+				newItem = storeUnbreakable (player, newItem);
 			} else {
 				newItem.setDurability ((short)0); // fix it up
 				newItem = addUnbreakable (newItem);

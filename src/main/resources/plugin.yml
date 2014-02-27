@@ -6,7 +6,7 @@
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 0.9.2
+version: 1.0
 author: filbert66
 description: Stops armor and tools from breaking
 softdepend: [LanguagesAPI]

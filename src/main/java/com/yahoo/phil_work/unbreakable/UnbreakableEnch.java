@@ -1,3 +1,10 @@
+/***
+ * File UnbreakableEnch.java
+ * 
+ * History:
+ * 27 Feb 2014 : PSW : added canApplyTogether(id)
+ */
+ 
 package com.yahoo.phil_work.unbreakable;
  
 import java.util.Arrays;
@@ -75,7 +82,7 @@ public class UnbreakableEnch extends Enchantment {
 			}
 			this.c = (Enchantment[]) arraylist.toArray(new Enchantment[0]);
 			
-			System.out.println ("UnbreakableEnch will have 1:" + this.c.length + " chance when enough XP");
+			System.out.println ("UnbreakableEnch on books will have 1:" + this.c.length + " chance when enough XP");
 		} catch (NoSuchFieldException ex) {
 			System.err.println ("Unbreakable: cannot get NMS.Enchantment.c[]");
 /**
@@ -102,12 +109,16 @@ public class UnbreakableEnch extends Enchantment {
     	return val;
 	}
  
+ 	public boolean canApplyTogether (int id) { 
+		return (id != Enchantment.DURABILITY.id && //doesn't make sense to have both.
+				id != this.id );  		// cant overlap
+	}
 	@Override
 	public boolean a(Enchantment other) { //canApplyTogether
-		return (other.id != Enchantment.DURABILITY.id && //doesn't make sense to have both.
-				other.id != this.id );  		// cant overlap
+		// System.out.println ("UnbreakableEnch.a(" + other+")");
+		return canApplyTogether (other.id);	// cant overlap
 	}
- 
+
  	/** Part of OBE
 	@Override
 	public EnchantmentTarget getItemTarget() {

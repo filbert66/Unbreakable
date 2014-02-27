@@ -1,0 +1,2 @@
+cd src/main/java; jar cvf ../../../bin/Unbreakable.jar com/yahoo/phil_work/unbreakable/*.class com/yahoo/phil_work/LanguageWrapper.class
+cd ../resources; jar uvf ../../../bin/Unbreakable.jar *.yml languages/*
