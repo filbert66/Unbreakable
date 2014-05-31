@@ -3,6 +3,7 @@
  * 
  * History:
  * 27 Feb 2014 : PSW : added canApplyTogether(id)
+ * 30 May 2014 : PSW : Update to 1.7.9
  */
  
 package com.yahoo.phil_work.unbreakable;
@@ -12,9 +13,10 @@ import java.util.ArrayList;
 import java.lang.reflect.Field;
 import java.util.Random;
 
-import net.minecraft.server.v1_7_R1.Enchantment;
-import net.minecraft.server.v1_7_R1.EnchantmentSlotType;
-import net.minecraft.server.v1_7_R1.ItemStack;
+// We do extract version in Unbreakable; could make even more reflective, but let's get an update out fast..
+import net.minecraft.server.v1_7_R3.Enchantment;
+import net.minecraft.server.v1_7_R3.EnchantmentSlotType;
+import net.minecraft.server.v1_7_R3.ItemStack;
 
 public class UnbreakableEnch extends Enchantment {
 	private static Random rnd = new Random (java.lang.System.currentTimeMillis());

@@ -13,6 +13,10 @@
  *              : Added book lore to language strings.
  *              : Make table ench rarer w 2 weight; now 5/27 when using 28 levels
  *              : use canApplyTogether() to avoid wasting Unbreaking/Unbreakable
+ *              : PSW : Added isUnbreakable() API call; remove unnecessary item naming.
+ *  30 May 2014 : PSW : Update to 1.7.9
+ * TODO:
+ *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
 
 package com.yahoo.phil_work.unbreakable;
@@ -221,6 +225,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	static private Class<?> class_CraftItemStack;
 	static private Class<?> class_NMSItemStack;
 	static private String versionPrefix = "";
+	static private boolean supportSetGlow = false;
 	static {
 		try {
 			String className = Bukkit.getServer().getClass().getName();
@@ -235,20 +240,29 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			class_CraftItemStack = null;
 			class_NMSItemStack = null;
 		}
+		
+		// THought was added in  1.7.9, and making at least this backward compat. Guess not
+		try {
+			supportSetGlow = (ItemMeta.class.getMethod ("setGlow", boolean.class) != null);
+		} catch (Exception ex) {
+			supportSetGlow = false;
+		}
 	}	
 	//returns a COPY of item that has unbreakable tag set
 	private ItemStack addUnbreakable (final ItemStack item) {
-		net.minecraft.server.v1_7_R1.ItemStack nms;
+		// should use class_NMSItemStack.getMethod for each of .method() calls, but that's busy!
+		net.minecraft.server.v1_7_R3.ItemStack nms;
+		boolean addedName = false;
 		
 		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
-			log.severe ("Cannot run; not version 1.7.2/3");
+			log.severe ("Cannot run; not version 1.7.2/3/9");
 			return item;
 		}
 		// NMS hacking begins!
 		// Use reflection to avoid static initializer errors for static methods, before we can print nice messages.
 		try {
 			Method _asNMSCopy = class_CraftItemStack.getMethod("asNMSCopy", Class.forName ("org.bukkit.inventory.ItemStack"));
-			nms = (net.minecraft.server.v1_7_R1.ItemStack) _asNMSCopy.invoke (null /*static method*/, item);
+			nms = (net.minecraft.server.v1_7_R3.ItemStack) (_asNMSCopy.invoke (null /*static method*/, item));
 		}
 		catch (Exception ex) {
 			ex.printStackTrace();
@@ -258,8 +272,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if ( !nms.hasTag()) {
 			String name = nms.getName();
 			nms.c (name); // creates a tag, too
+			addedName = true;
 		}
 		nms.getTag().setBoolean ("Unbreakable", true); 
+		if (addedName) {
+			nms.t(); //removes name
+		}
 		//*DEBUG*/ log.info ("addUnbreakable(" + item.getType() +") = " + nms.getTag());
 		try {
 			Method _asCraftMirror = class_CraftItemStack.getMethod("asCraftMirror", nms.getClass());
@@ -270,9 +288,30 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		}
 		// end NMS Hacking; fail-safe return below.
 
-		log.warning ("Unable to add unbreakable tag to:" + item.getType() +")");		
+		log.warning ("Unable to add unbreakable tag to:" + item.getType());		
 		return item;	
 	}
+	
+	boolean isUnbreakable (ItemStack item) {
+		net.minecraft.server.v1_7_R3.ItemStack nms;
+		boolean addedName = false;
+		
+		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
+			log.severe ("Cannot run; not version 1.7.2/3/9");
+			return false;
+		}
+		// NMS hacking begins!
+		// Use reflection to avoid static initializer errors for static methods, before we can print nice messages.
+		try {
+			Method _asNMSCopy = class_CraftItemStack.getMethod("asNMSCopy", Class.forName ("org.bukkit.inventory.ItemStack"));
+			nms = (net.minecraft.server.v1_7_R3.ItemStack) ( _asNMSCopy.invoke (null /*static method*/, item) );
+		}
+		catch (Exception ex) {
+			ex.printStackTrace();
+			return false;
+		}
+		return nms.hasTag() && nms.getTag().getBoolean ("Unbreakable");
+	}	
 
 	// Add unbreakable to the book
 	private ItemStack storeUnbreakable (Player p, ItemStack item) {
@@ -452,9 +491,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}
 		} 
 		if (added) {
-			if (enchants == 1 && item.getType() != Material.ENCHANTED_BOOK)
-				item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if none other enchs
-
+			if (enchants == 1 && item.getType() != Material.ENCHANTED_BOOK) {
+				/**if (supportSetGlow)
+					item.getItemMeta().setGlow (true);
+				else**/
+					item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if none other enchs
+			}
 			((EnchantingInventory)event.getInventory()).setItem (item); // unsafe, but we know it's enchantment
 			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
 					  "{0} just enchanted a {1} with UNBREAKABLE", event.getEnchanter().getName(), item.getType() ));
@@ -524,7 +566,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			{
 				final ItemStack slot0 = tool, slot1 = book;
 				tool = tool.clone(); // make sure we dont change what's in the anvil, in case it's taken back
-				tool.addEnchantment (Enchantment.DURABILITY, 1); // for glowies
+				/**if (supportSetGlow)
+					tool.getItemMeta().setGlow (true);
+				else**/
+					tool.addEnchantment (Enchantment.DURABILITY, 1); // for glowies
+					
 				final ItemStack unbreakableItem = addUnbreakable (tool);
 				final HumanEntity human = event.getWhoClicked();
 				final Player player = (Player)human; 
@@ -593,7 +639,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					(new EnchantRunner()).runTaskLater(this, getConfig().getInt ("Anvil enchant delay sec") * 20);	
 			}
 			else {
-				log.info ("No Unbreakable in: " + ((EnchantmentStorageMeta)book.getItemMeta()).getStoredEnchants().keySet());
+				// log.info ("No Unbreakable in: " + ((EnchantmentStorageMeta)book.getItemMeta()).getStoredEnchants().keySet());
 			}
 		}
 	}
@@ -645,12 +691,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 
 		if (UNBREAKABLE == null)
 			return;
-			
-		if (this.getServer().getBukkitVersion().startsWith ("1.7.2-R0.")) {
+		String serverVer = this.getServer().getBukkitVersion();
+		if (serverVer.startsWith ("1.7.2-R0.") || serverVer.startsWith ("1.7.9-R0.") ) {
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
 		} else
-			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with 1.7.2-R0.2/3 (today)"));
+			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with 1.7.9 (today)")); // was 2-R0.2/3
 	}
 	
 	public void onDisable()
