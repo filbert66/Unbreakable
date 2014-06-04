@@ -15,6 +15,7 @@
  *              : use canApplyTogether() to avoid wasting Unbreaking/Unbreakable
  *              : PSW : Added isUnbreakable() API call; remove unnecessary item naming.
  *  30 May 2014 : PSW : Update to 1.7.9
+ *  03 Jun 2014 : PSW : Configurably don't reset durability
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -381,7 +382,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		
 		// Config & permissions OK
 		{
-			newItem.setDurability ((short)0); // durability goes from 0(new) to max
+			if (getConfig().getBoolean ("Also repair"))
+				newItem.setDurability ((short)0); // durability goes from 0(new) to max
 	
 			final ItemStack unbreakableItem = addUnbreakable (newItem);
 
@@ -734,7 +736,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				newItem.setType (Material.ENCHANTED_BOOK);
 				newItem = storeUnbreakable (player, newItem);
 			} else {
-				newItem.setDurability ((short)0); // fix it up
+				if (getConfig().getBoolean ("Also repair"))
+					newItem.setDurability ((short)0); // fix it up
 				newItem = addUnbreakable (newItem);
 			}		
 			//*DEBUG*/log.info ("newItem = "+ newItem);	

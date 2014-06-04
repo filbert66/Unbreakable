@@ -5,6 +5,7 @@ Message on enchant: false
 Protect armor: true
 Protect tools: true
 Protect weapons: true
+Also repair: true
 
 Anvil enchant delay sec: 5
 Anvil enchant cost: 8
