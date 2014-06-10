@@ -2,10 +2,32 @@ Message on making unbreakable: true
 Message on enchant cancel: true
 Message on enchant: false
 
-Protect armor: true
-Protect tools: true
-Protect weapons: true
 Also repair: true
 
 Anvil enchant delay sec: 5
 Anvil enchant cost: 8
+
+#
+# Enchanting worldlist:
+# - world
+
+Protect armor: true
+Protect tools: true
+Protect weapons: true
+#
+# Following only effective if one or more of above three set true
+#
+
+# Auto fix worldlist:
+# - world
+
+# No permissions check if this turned on
+Unbreakable on spawn: false
+# Permissions checked for this one and next
+Unbreakable on pickup: false
+# Checks entire player inventory
+Unbreakable on join: false
+# remove Unbreakable when entering world not in 'Auto fix worldlist', if it's been set
+Breakable on leave world: false
+
+

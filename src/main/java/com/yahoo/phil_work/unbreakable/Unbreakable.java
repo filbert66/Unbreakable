@@ -16,6 +16,8 @@
  *              : PSW : Added isUnbreakable() API call; remove unnecessary item naming.
  *  30 May 2014 : PSW : Update to 1.7.9
  *  03 Jun 2014 : PSW : Configurably don't reset durability
+ *  10 Jun 2014 : PSW : Added more event handlers, isActiveInWorld, isEnchantingInWorld, removeUnbreakable(), isProtectedItem() forms
+ *                    : Consolidated "Also repair" check, 
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -45,9 +47,14 @@ import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.Repairable;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.event.entity.ItemSpawnEvent;
+import org.bukkit.event.player.PlayerPickupItemEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.event.player.PlayerItemBreakEvent;
@@ -57,6 +64,7 @@ import org.bukkit.event.enchantment.EnchantItemEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType.SlotType;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.plugin.*;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -222,6 +230,26 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				return false;
 		}
 	}
+	private boolean isActiveInWorld (String w) {
+		final String configItem = "Auto fix worldlist";
+		
+		if (getConfig().isList (configItem))
+			return getConfig().getList(configItem).contains (w);
+		else 
+		// default to true everywhere if not configured
+			return true;
+	}
+	private boolean isEnchantingInWorld (String w) {
+		final String configItem = "Enchanting worldlist";
+		
+		if (getConfig().isList (configItem))
+			return getConfig().getList(configItem).contains (w);
+		else 
+		// default to true everywhere if not configured
+			return true;
+	}
+			
+			
 
 	static private Class<?> class_CraftItemStack;
 	static private Class<?> class_NMSItemStack;
@@ -249,8 +277,14 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			supportSetGlow = false;
 		}
 	}	
-	//returns a COPY of item that has unbreakable tag set
 	private ItemStack addUnbreakable (final ItemStack item) {
+		return setUnbreakable (item, true);
+	}
+	private ItemStack removeUnbreakable (final ItemStack item) {
+		return setUnbreakable (item, false);
+	}	
+	//returns a COPY of item that has unbreakable tag set
+	private ItemStack setUnbreakable (final ItemStack item, boolean value) {
 		// should use class_NMSItemStack.getMethod for each of .method() calls, but that's busy!
 		net.minecraft.server.v1_7_R3.ItemStack nms;
 		boolean addedName = false;
@@ -259,6 +293,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			log.severe ("Cannot run; not version 1.7.2/3/9");
 			return item;
 		}
+		if (getConfig().getBoolean ("Also repair"))
+			item.setDurability ((short)0); // durability goes from 0(new) to max
+	
 		// NMS hacking begins!
 		// Use reflection to avoid static initializer errors for static methods, before we can print nice messages.
 		try {
@@ -275,7 +312,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			nms.c (name); // creates a tag, too
 			addedName = true;
 		}
-		nms.getTag().setBoolean ("Unbreakable", true); 
+		nms.getTag().setBoolean ("Unbreakable", value); 
 		if (addedName) {
 			nms.t(); //removes name
 		}
@@ -293,7 +330,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		return item;	
 	}
 	
-	boolean isUnbreakable (ItemStack item) {
+	boolean isUnbreakable (final ItemStack item) {
 		net.minecraft.server.v1_7_R3.ItemStack nms;
 		boolean addedName = false;
 		
@@ -335,12 +372,89 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		return item;
 	}
 	
+	private boolean isProtectedItem (final Location l, final ItemStack item) {
+		if (! isActiveInWorld (l.getWorld().getName()) ||
+			item.getType().getMaxDurability() <= 0 ) // doesn't use up durability)
+			return false;
+
+		Material m = item.getType();		
+		if (isWeapon (m))
+			return getConfig().getBoolean ("Protect weapons");
+		else if (isTool(m))
+			return getConfig().getBoolean ("Protect tools");
+		else if (isArmor(m))
+			return getConfig().getBoolean ("Protect armor");
+		else 
+			return false;
+	}
+	private boolean isProtectedItem (Item item) {
+		return isProtectedItem (item.getLocation(), item.getItemStack());
+	}
+	private boolean isProtectedItem (final Player player, final ItemStack item) {
+		if (player == null) {
+			log.warning ("isProtectedItem: player is null");
+			return false;
+		}
+		
+		if ( !isProtectedItem (player.getLocation(), item))
+			return false;
+
+		// It is, but check permissions
+		Material m = item.getType();		
+		if (isWeapon (m) && player.isPermissionSet ("unbreakable.weapons") && !player.hasPermission ("unbreakable.weapons")) {
+			log.fine (player.getName() + " doesn't have unbreakable.weapons");
+			return false;
+		}
+		else if (isTool(m) && player.isPermissionSet ("unbreakable.tools") && !player.hasPermission ("unbreakable.tools")) {
+			log.fine (player.getName() + " doesn't have unbreakable.tools");
+			return false;
+		}
+		// else must be armor
+		else if (player.isPermissionSet ("unbreakable.armor") && !player.hasPermission ("unbreakable.armor")) {
+			log.fine (player.getName() + " doesn't have unbreakable.armor");
+			return false;
+		}		
+		return true;
+	}
+	
+	// Add Unbreakable tag to all subject items in player's inventory
+	private void addUnbreakable (Player p) {
+		Inventory inv = p.getInventory();
+		for (int i = 0; i < inv.getSize(); i++) {
+			ItemStack item = inv.getItem (i);
+			if (item != null && item.getType() != Material.AIR && isProtectedItem (p, item) && !isUnbreakable (item)) {
+				inv.setItem (i, addUnbreakable (item));
+				if (getConfig().getBoolean ("Message on making unbreakable"))
+					p.sendMessage (language.get (p, "saved", chatName +": Your {0} is now unbreakable", item.getType()));
+			}
+		}
+	}
+	// Removes Unbreakable tag 
+	// Returns: true if any item removed Unbreakable
+	private boolean removeUnbreakable (Inventory inv) {
+		boolean ifChanged = false;
+		for (int i = 0; i < inv.getSize(); i++) {
+			ItemStack item = inv.getItem (i);
+			if (item != null && item.getType() != Material.AIR && item.getType().getMaxDurability() > 0 && isUnbreakable (item)) {
+				inv.setItem (i, removeUnbreakable (item));
+				ifChanged = true;
+			}
+		}
+		return ifChanged;
+	}
+
+	/* 
+	 * Event Listeners, doing the real work
+	 */
 	@EventHandler (ignoreCancelled = true)
 	void breakMonitor (PlayerItemBreakEvent event) {
 		ItemStack newItem = event.getBrokenItem().clone();
 		final Player player = event.getPlayer();
 		PlayerInventory inventory = player.getInventory();
 		Material m = event.getBrokenItem().getType();
+		
+		if (! isActiveInWorld (player.getLocation().getWorld().getName()))
+			return;
 
 		if ( !(isArmor (m) || isWeapon (m) || isTool (m))) {
 			log.warning ("How could an unrepairable  " + m + " break??");
@@ -351,40 +465,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		newItem.setAmount (1);
 			
 		// Find that item in player's hand or armor and check config & permissions
-		if (newItem.isSimilar(inventory.getItemInHand())) 
+		if (isProtectedItem (player, newItem)) 
 		{
-			final boolean isWeapon = isWeapon (m);
-			
-			if ((isWeapon && !getConfig().getBoolean ("Protect weapons")) || 
-				(!isWeapon && !getConfig().getBoolean ("Protect tools")) ) 
-			{
-				log.config ("Not configured to protect a " + newItem.getType());
-				return;
-			}
-			else if (isWeapon && player.isPermissionSet ("unbreakable.weapons") && !player.hasPermission ("unbreakable.weapons")) {
-				log.fine (player.getName() + " doesn't have unbreakable.weapons");
-				return;
-			}
-			else if (!isWeapon && player.isPermissionSet ("unbreakable.tools") && !player.hasPermission ("unbreakable.tools")) {
-				log.fine (player.getName() + " doesn't have unbreakable.tools");
-				return;
-			}
-		}
-		// else must be armor
-		else if ( !isArmor (m) || !getConfig().getBoolean ("Protect armor")) {
-			log.config ("Not configured to protect armor: " + newItem.getType());
-			return;
-		}
-		else if (player.isPermissionSet ("unbreakable.armor") && !player.hasPermission ("unbreakable.armor")) {
-			log.fine (player.getName() + " doesn't have unbreakable.armor");
-			return;
-		}
-		
-		// Config & permissions OK
-		{
-			if (getConfig().getBoolean ("Also repair"))
-				newItem.setDurability ((short)0); // durability goes from 0(new) to max
-	
 			final ItemStack unbreakableItem = addUnbreakable (newItem);
 
 			class ReplaceRunner extends BukkitRunnable {
@@ -447,6 +529,10 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		
 		if ( !player.hasPermission ("unbreakable.ench"))
 			return;
+		if ( !isEnchantingInWorld (player.getLocation().getWorld().getName())) {
+			log.info ("enchanting Unbreakable in " + player.getLocation().getWorld().getName() + " is off");
+			return;
+		}
 
 		int enchants = 0;
 		for (Enchantment ench : event.getEnchantsToAdd().keySet()) {
@@ -523,6 +609,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		ItemStack tool = null;
 		Inventory inv = event.getInventory();
 		final Enchantment OB_Unbreakable = Enchantment.getById (UB_ID);
+
+		if ( !isEnchantingInWorld (event.getWhoClicked().getLocation().getWorld().getName()))
+			return;
 				
 		// log.info ("InventoryClickEvent " +event.getAction()+" in type " + inv.getType() + " in  slot " + event.getRawSlot() + "(raw " + event.getSlot());
 		InventoryAction action = event.getAction();
@@ -649,7 +738,67 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	/** Future: Add Invulnerable tag and set boolean in NMS.Entity on ItemSpawnEvent (i.e. dropped) per 
 	https://forums.bukkit.org/threads/indestructible-items-lava.215217/
 	**/
+
+	@EventHandler (ignoreCancelled = true)
+	void itemMonitor (ItemSpawnEvent event) {
+		ItemStack item = event.getEntity().getItemStack();
+		
+		if (getConfig().getBoolean ("Unbreakable on spawn") && isProtectedItem (event.getEntity()))
+		{
+			event.getEntity().setItemStack (addUnbreakable (item));
+			// log.info ("Added unbreakable to spawned " + item.getType());
+		}
+		else {
+			//*DEBUG*/log.info ("Not making " + item.getType() + " unbreakable: " + item.getType().getMaxDurability() );
+		}
+	}
 	
+	@EventHandler (ignoreCancelled = true)
+	void pickupMonitor (PlayerPickupItemEvent event) {
+		ItemStack item = event.getItem().getItemStack();
+		final Player p = event.getPlayer();
+					
+		if (getConfig().getBoolean ("Unbreakable on pickup")  && isProtectedItem (p, item) && !isUnbreakable(item))
+		{
+			//	event.getItem().setItemStack (addUnbreakable (item));
+			event.setCancelled (true); // don't give them that item
+			event.getItem().remove();  // delete this item
+			p.getInventory().addItem (addUnbreakable (item)); // don't check for success bcs we know this worked by fact that this event was called
+			if (getConfig().getBoolean ("Message on making unbreakable"))
+				p.sendMessage (language.get (p, "saved", chatName +": Your {0} is now unbreakable", item.getType()));
+		}
+	}
+	
+	/* 
+	 * Automated events to mark all Un/breakable when joining certain worlds
+	 */
+	@EventHandler (ignoreCancelled = true)
+	void joinMonitor (PlayerJoinEvent event) {
+		Player player = event.getPlayer();
+		if (getConfig().getBoolean ("Unbreakable on join") && isActiveInWorld (player.getLocation().getWorld().getName()))
+			addUnbreakable (player);
+		else if (getConfig().getBoolean ("Breakable on leave world") && ! isActiveInWorld (player.getLocation().getWorld().getName())) {
+			if (removeUnbreakable (player.getInventory()))
+				player.sendMessage (language.get (player, "removed", chatName + ": all items are breakable in {0}", player.getLocation().getWorld().getName()));
+		}		
+	}
+	// Also check when changing worlds
+	@EventHandler (ignoreCancelled = true)
+	void worldMonitor (PlayerChangedWorldEvent event) {
+		Player player = event.getPlayer();
+		if (getConfig().getBoolean ("Unbreakable on join") && isActiveInWorld (player.getLocation().getWorld().getName()))
+			addUnbreakable (player);
+		else if (getConfig().getBoolean ("Breakable on leave world") && // active->not
+				isActiveInWorld (event.getFrom().getName()) && ! isActiveInWorld (player.getLocation().getWorld().getName())) {
+			if (removeUnbreakable (player.getInventory()))
+				player.sendMessage (language.get (player, "removed", chatName + ": all items are breakable in {0}", player.getLocation().getWorld().getName()));
+		}
+	}
+	
+
+	/*
+	 * Startup/Shutdown routines
+	 */	
 	private void addNewLanguages () {
 		final String pluginPath = "plugins"+ getDataFolder().separator + getDataFolder().getName() + getDataFolder().separator;
 
@@ -674,8 +823,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		} catch (Exception ex) {
 			log.warning ("Unable to process language files: " + ex);		
 		}	
-	}		   
-			
+	}
+	
 	public void onEnable()
 	{
 		log = this.getLogger();
@@ -736,8 +885,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				newItem.setType (Material.ENCHANTED_BOOK);
 				newItem = storeUnbreakable (player, newItem);
 			} else {
-				if (getConfig().getBoolean ("Also repair"))
-					newItem.setDurability ((short)0); // fix it up
 				newItem = addUnbreakable (newItem);
 			}		
 			//*DEBUG*/log.info ("newItem = "+ newItem);	

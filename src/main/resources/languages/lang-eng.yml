@@ -12,3 +12,4 @@ bookLore1: storing 'Unbreakable'
 bookLore2: will auto-enchant after {0}s when
 bookLore3: in anvil with Repairable
 bookLore4: enchant cost: {0}
+removed: §9Unbreakable§r: all items are breakable in {0}
