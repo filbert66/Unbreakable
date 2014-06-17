@@ -1,0 +1,126 @@
+Do epic mobs or weapons destroy your armor //like that <snap!>?// Don't like having to recreate armor all the time? Or wish your super-epic gold weapon wouldn't wear out so quickly? Unbreakable will make it //never// wear out.
+
+Unbreakable is a simple idea, [[http://forums.bukkit.org/threads/infinite-durability-and-unbreakable-equipment.196859/|inspired by @shoter]] : don't allow armor or weapons to break when hit, especially when it is hit //hard//. It does so __not__ by the //unbreaking// enchantment, which only slows down the inevitable, nor by repeatedly repairing your item, which both is a heavy server load and no good if it breaks, but by a new feature hidden in 1.7.2 Minecraft to make some things //never break//. 
+
+By design this plugin is //very// lightweight. It only fires when an item breaks, and only does that once per item. Or, (++New since 1.5:) you can now configure it to be a little more active and pre-mark items as //unbreakable// before they are even used. Have had a lot of requests for this feature, so hope you're happy.++
+
+==Description==
+The first time your item breaks, it will immediately be given back to you with an <<color 00f>>Unbreakable<</color>> tag, which you can see when mousing over the item. All attributes, metadata, and tags are retained. 
+
+++Alternatively (new in 1.5) you can now avoid items getting "used up" and appearing to break by setting [[/bukkit-plugins/unbreakableitems/pages/main/#w-unbreakable-before-break|Unbreakable before break]] config items.++
+
+=== Enchanting ===
+If you turn off automatic protection for a user (using [[/bukkit-plugins/unbreakableitems/pages/main/#w-permissions|permissions]] or [[/bukkit-plugins/unbreakableitems/pages/main/#w-world-based-controls|world-specific settings]]), this may be useful: //Unbreakable// now can appear in enchanting table. Also supports enchanting books and using them on an anvil.
+
+=== **Caveats** ===
+# some plugins that manage tool/weapon breaking on their own do not respect the new Unbreakable tag, and so will still damage the item. Suggest submitting a feature request to the plugin author to respect it. 
+# __Only works with version 1.7.2-R0.2 or greater__; currently //must match// versions of this against Bukkit versions.
+# <<color 00f>>Unbreakable<</color>> tag not restored through server stop/save/restarts and __right__ clicking to place one. Known Bukkit issue. [[https://bukkit.atlassian.net/browse/BUKKIT-5441|Vote it up here]].
+
+==Configuration==
+Version 1.0 now copies default config.yml to plugins/Unbreakable/ if none exists.
+
+Three config items control what is __automatically__ made unbreakable. "Weapons" means only swords and bows. "Tools" means everything else. Names and defaults below:
+<<code yml>>
+Protect armor: true
+Protect weapons: true
+Protect tools: true
+<</code>>
+
+++One more item (NEW in 1.6) allows tagging only certain unique items as unbreakable, by finding a string in its Lore. If you configure this string and that string is found within any item's Lore, that item will become unbreakable //without checking user permissions or World-based controls//. ++ Example below:
+<<code yml>>
+Lore unbreakable string: Unbreakable
+<</code>>
+
+If you do //not// want a message to players when their item becomes unbreakable, make a plugins/Unbreakable/config.yml with the one line:
+<<code yml>>
+Message on making unbreakable: false
+<</code>>
+
+New in 1.2: Can change default to //not// repair items when making <<color 00f>>Unbreakable<</color>>. Preserves the damage value, commonly referred as data value. For consistency with previous versions, default is to do a repair as per below, setting it to zero.
+<<code yml>>
+Also repair: true
+<</code>>
+
+=== ++Unbreakable before break++ ===
+++ Newly added in version 1.5:++
+By default items are only marked <<color 00f>>Unbreakable<</color>> once they break since this is the least server load, but it can make your users nervous when their items appear to be wearing out. You can now pre-mark //automatically// protected items (i.e. one or more **Protect armor/weapons/tools** is set) as <<color 00f>>Unbreakable<</color>>, based on different events. Select the ones you prefer based on acceptable server load. They are presented roughly in increasing server load. All default to false.
+* **Unbreakable on pickup**: if true, all protected items picked up by a player (who has permission) will become unbreakable.
+* **Unbreakable on spawn**: if true, all protected items spawned on ground (ex. when dropped) will become unbreakable. 
+** Does not check player permissions, so if this marks an item //anybody// can pick it up.
+* ++**Unbreakable on hold**: if true, any protected item moved to hand will become unbreakable.[NEW in 1.6]++
+** note that this likely won't catch armor, but will catch weapons and armor.
+* **Unbreakable on join**: if true, __all__ protected & permitted items in a player's inventory will become unbreakable when he joins server or moves worlds.
+** may not work with plugins adding nested inventory items like backpacks.
+* **Breakable on leave world**: if true, removes __all__ <<color 00f>>Unbreakable<</color>> tags on items in a player's inventory when she leaves a protected world to an unprotected one. 
+** only effective if **Auto fix worldlist** is set; see below
+** //Caution:// can remove legally <<color 00f>>Unbreakable<</color>> enchants from items.
+
+=== ++World-based controls++ ===
+++ Newly added in version 1.5:++
+Can configure automatic protections and enchanting only for certain worlds. If not set, both default to __all__ worlds.  If you use these, may wish to use a world-specific inventory plugin like [[/bukkit-plugins/multiinv|MultiInv]] or [[/bukkit-plugins/enteis-inventory-manager|Entei's Inventory Manager]] to keep inventories from Unbreakable worlds from moving to other worlds, or v.v.. 
+
+* **Auto fix worldlist**: list of worlds in which auto-fixing by event and/or item type is active
+** only applies to **Protect armor/weapons/tools**, that is,
+** **Lore unbreakable string** if set applies to __all__ worlds regardless of this since the item always has such lore
+
+* **Enchanting worldlist**: list of worlds in which //Unbreakable// enchanting of items or books is permitted.
+
+Examples:
+<<code yml>>
+Auto fix worldlist: 
+- pvp_world
+
+Enchanting worldlist:
+- survival_world
+- adventure_world
+<</code>>
+
+=== Config for Enchanting ===
+Four new items control enchanting behavior. First controls whether a message is sent to the player enchanting, second applies when using an anvil, and last two control the mechanics of enchanting with a book storing //Unbreakable//. Latter two are embedded into the book lore. Defaults are below.
+
+<<code yml>>
+Message on enchant: false
+Message on enchant cancel: true
+
+Anvil enchant delay sec: 5
+Anvil enchant cost: 8
+<</code>>
+
+== Permissions ==
+Has a corresponding permission so that you can give individuals by user/group. Use is optional and all default to true. Note that these only apply to automatic triggers from **Protect armor/weapons/tools** and are NOT checked if **Unbreakable on spawn** is true or if **Lore unbreakable string** is set and triggered.
+* **unbreakable.armor**
+* **unbreakable.weapons**
+* **unbreakable.tools**
+
+Enchanting is controlled by the following permissions, with shown defaults:
+* **unbreakable.cmd**: Allows enchanting held item with <<color 00f>>Unbreakable<</color>> //by **unbk** command//
+** default: op
+* **unbreakable.ench**: Allows enchanting item with <<color 00f>>Unbreakable<</color>> //on Enchant table// 
+** default: true
+* **unbreakable.anvil**: Allows enchanting an item with an <<color 00f>>Unbreakable<</color>> book //on anvil//
+** default: true
+
+== Commands ==
+One command: **unbk** which enchants the held item with <<color 00f>>Unbreakable<</color>>. 
+
+== Multiple Language Support == 
+ Supports multiple languages. See [[/bukkit-plugins/unbreakableitems/pages/languages-and-translations/|Languages and Translation page]] for details. 
+
+== Future Ideas ==
+* Allow for making an item unbreakable by finding a certain string within Lore. 
+* Add similar functionality for similar //Invulnerable// tag, which means it can't be destroyed when dropped, even by lava. 
+
+-- Add config flag to make things unbreakable before they "break". Will be higher load on server. 
+
+-- Command-line enchant 
+
+-- Enchantment for Unbreakability. 
+
+-- Configurable whether armor, weapons, or tools are unbreakable.
+
+-- Permissions for the same.
+
+-- Less version dependency, perhaps using reflection to allow forward-compatibility. Fail gracefully on old versions.
+
+-- LanguagesAPI, for translations.

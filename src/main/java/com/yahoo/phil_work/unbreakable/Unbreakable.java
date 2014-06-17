@@ -17,7 +17,8 @@
  *  30 May 2014 : PSW : Update to 1.7.9
  *  03 Jun 2014 : PSW : Configurably don't reset durability
  *  10 Jun 2014 : PSW : Added more event handlers, isActiveInWorld, isEnchantingInWorld, removeUnbreakable(), isProtectedItem() forms
- *                    : Consolidated "Also repair" check, 
+ *                    : Consolidated "Also repair" check
+ *  11 Jun 2014 : PSW : Added isProtectedByLore, sound on pickup event, PlayerItemHeldEvent
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -51,6 +52,7 @@ import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.EntityType;
@@ -372,11 +374,26 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		return item;
 	}
 	
+	private boolean isProtectedByLore (ItemStack item) {
+		String trigger = getConfig().getString ("Lore unbreakable string");
+		
+		if (trigger != null && item.getItemMeta().hasLore()) {
+			for (String lore : item.getItemMeta().getLore()) {
+				lore.toLowerCase();
+				if (lore.contains (trigger))
+					return true;
+			}
+		}
+		return false;
+	}
 	private boolean isProtectedItem (final Location l, final ItemStack item) {
+		if (isProtectedByLore (item))
+			return true;
+
 		if (! isActiveInWorld (l.getWorld().getName()) ||
 			item.getType().getMaxDurability() <= 0 ) // doesn't use up durability)
 			return false;
-
+			
 		Material m = item.getType();		
 		if (isWeapon (m))
 			return getConfig().getBoolean ("Protect weapons");
@@ -398,6 +415,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		
 		if ( !isProtectedItem (player.getLocation(), item))
 			return false;
+		else if (isProtectedByLore (item))
+			return true;	// don't check permissions if item-specific flag set
 
 		// It is, but check permissions
 		Material m = item.getType();		
@@ -502,23 +521,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		}
 	}
 	
-	/*** Could do this to avoid the item appearing to break, but is it worth the CPU?
-	**
-	@EventHandler (ignoreCancelled = true)
-	void heldMonitor (PlayerItemHeldEvent event) {
-		Player player = event.getPlayer();
-		ItemStack held = player.getInventory().getItem (event.getNewSlot());
-
-		// if hasPermissions ()
-		if (held.getItemMeta() instanceof Repairable)) {
-			// if !hasTag ("Unbreakable"); don't want to do every time, but cost of checking is almost the same.
-			player.setItemInHand (addUnbreakable (held));
-			
-			// But then this shouldn't happen every time either.... Hrmmm.
-			if (getConfig().getBoolean ("Message on making unbreakable"))
-				player.sendMessage (language.get (player, "saved", "[Unbreakable] Your {0} is now unbreakable", held.getType()));
-	}
-	***/
 	@EventHandler (ignoreCancelled = true)
 	void enchantMonitor (EnchantItemEvent event) {
 		Player player = event.getEnchanter();
@@ -764,6 +766,22 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			event.setCancelled (true); // don't give them that item
 			event.getItem().remove();  // delete this item
 			p.getInventory().addItem (addUnbreakable (item)); // don't check for success bcs we know this worked by fact that this event was called
+			if (getConfig().getBoolean ("Message on making unbreakable"))
+				p.sendMessage (language.get (p, "saved", chatName +": Your {0} is now unbreakable", item.getType()));
+			p.playSound (p.getLocation(), Sound.ITEM_PICKUP, 10.0F, 10);
+		}
+	}
+
+	@EventHandler (ignoreCancelled = true)
+	void heldMonitor (PlayerItemHeldEvent event) {
+		final Player p = event.getPlayer();
+		ItemStack item = p.getInventory().getItem (event.getNewSlot());
+		if (item == null)
+			return;
+				
+		if (getConfig().getBoolean ("Unbreakable on hold")  && isProtectedItem (p, item) && !isUnbreakable(item))
+		{
+			p.getInventory().setItem (event.getNewSlot(), addUnbreakable (item)); 
 			if (getConfig().getBoolean ("Message on making unbreakable"))
 				p.sendMessage (language.get (p, "saved", chatName +": Your {0} is now unbreakable", item.getType()));
 		}

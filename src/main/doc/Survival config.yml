@@ -1,23 +1,24 @@
+# Example Config for 
+# NOTHING automatically unbreakable, only what players enchant or for specially tagged (by lore) items
+
 Message on making unbreakable: true
 Message on enchant cancel: true
 Message on enchant: false
 
-Also repair: true
+Also repair: false
 
 Anvil enchant delay sec: 5
 Anvil enchant cost: 8
 
-#
-# Enchanting worldlist:
-# - world
-# Lore unbreakable string: Unbreakable
+# Not set, so defaults to ALL
+#Enchanting worldlist: 
+#- world
 
-Protect armor: true
-Protect tools: true
-Protect weapons: true
-#
-# Following only effective if one or more of above three set true
-#
+Lore unbreakable string: Unbreakable
+
+Protect armor: false
+Protect tools: false
+Protect weapons: false
 
 # Auto fix worldlist:
 # - world
@@ -25,7 +26,8 @@ Protect weapons: true
 # No permissions check if this turned on
 Unbreakable on spawn: false
 # Permissions checked for these three
-Unbreakable on pickup: false
+# Set to try to catch LegendaryWeapons drops right away
+Unbreakable on pickup: true
 # Only effective for tools and weapons, may not catch armor
 Unbreakable on hold: false
 # Checks entire player inventory

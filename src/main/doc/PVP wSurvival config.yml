@@ -1,0 +1,43 @@
+# Example Config for 
+# Only what players enchant or for specially tagged (by lore) items
+#  except in PVP world, all armor and weapons protected
+# To prevent carrying unbreakable items from PVP into other worlds, suggest
+#  an world-specific inventory plugin like MultiInv or Entei's Inventory Manager
+# http://dev.bukkit.org/bukkit-plugins/enteis-inventory-manager/
+# http://dev.bukkit.org/bukkit-plugins/multiinv/
+
+Message on making unbreakable: true
+Message on enchant cancel: true
+Message on enchant: false
+
+Also repair: true
+
+Anvil enchant delay sec: 5
+Anvil enchant cost: 8
+
+Enchanting worldlist: 
+- survival_world
+- adventure_world
+
+Lore unbreakable string: Unbreakable
+
+Protect armor: true
+Protect tools: false
+Protect weapons: true
+
+Auto fix worldlist:
+- pvp_world
+
+# No permissions check if this turned on
+Unbreakable on spawn: false
+# Permissions checked for these three
+# Set to try to catch LegendaryWeapons drops right away
+Unbreakable on pickup: true
+# Only effective for tools and weapons, may not catch armor
+Unbreakable on hold: false
+# Checks entire player inventory
+Unbreakable on join: false
+# remove Unbreakable when entering world not in 'Auto fix worldlist', if it's been set
+Breakable on leave world: false
+
+
