@@ -8,21 +8,25 @@
  
 package com.yahoo.phil_work.unbreakable;
  
+import com.yahoo.phil_work.unbreakable.UnbreakableEnch;
+ 
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.lang.reflect.Field;
 import java.util.Random;
 
-// We do extract version in Unbreakable; could make even more reflective, but let's get an update out fast..
+// We do extract version in Unbreakable; could make even more reflective, but that requires modifying the run-time loader API,
+//   So instead we will "build" this for each compatible version of NMS, and control loading of which one
+//   is loaded by only referring to this class by the reflective interface. 
 import net.minecraft.server.v1_7_R3.Enchantment;
 import net.minecraft.server.v1_7_R3.EnchantmentSlotType;
 import net.minecraft.server.v1_7_R3.ItemStack;
 
-public class UnbreakableEnch extends Enchantment {
+public class UnbreakableEnchv1_7_R3 extends Enchantment implements UnbreakableEnch {
 	private static Random rnd = new Random (java.lang.System.currentTimeMillis());
 	private static Enchantment[] c;
 
-	public UnbreakableEnch (int id, int weight)  {
+	public UnbreakableEnchv1_7_R3 (int id, int weight)  {
 		super(id, weight, EnchantmentSlotType.BREAKABLE); // calls OB.Enchantment.registerEnchantment, so need to make sure that is AcceptingRegistrations
 		this.b ("Unbreakable"); // setName
 	}
@@ -103,7 +107,7 @@ public class UnbreakableEnch extends Enchantment {
 		} else 
 			return false;
 	}	
-
+	
 	@Override
 	public boolean canEnchant(ItemStack item) {
         boolean val = item.getItem().usesDurability() ? true : super.canEnchant(item);

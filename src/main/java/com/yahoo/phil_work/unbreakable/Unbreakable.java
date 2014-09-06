@@ -19,6 +19,8 @@
  *  10 Jun 2014 : PSW : Added more event handlers, isActiveInWorld, isEnchantingInWorld, removeUnbreakable(), isProtectedItem() forms
  *                    : Consolidated "Also repair" check
  *  11 Jun 2014 : PSW : Added isProtectedByLore, sound on pickup event, PlayerItemHeldEvent
+ *  29 Aug 2014 : PSW : Add right-click monitor to ensure both still Unbreakable; MaterialCategory
+ *  01 Sep 2014 : PSW : New reflection to pick right version-specific enchantment class
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -27,12 +29,14 @@ package com.yahoo.phil_work.unbreakable;
 
 import com.yahoo.phil_work.unbreakable.UnbreakableEnch;
 import com.yahoo.phil_work.LanguageWrapper;
+import com.yahoo.phil_work.MaterialCategory;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Constructor;
 import java.util.Collections;
 import java.util.List;
 import java.util.logging.Logger;
@@ -82,6 +86,56 @@ public class Unbreakable extends JavaPlugin implements Listener {
     // can't make below configurable bcs it is initialized before loading plugin
     static final int UB_Weight = 2; // scale of 1-10, 1 being rarest, like thorns, silk    
     
+    // Code to get current version-specific classes of NMS classes
+	static private Class<?> class_CraftItemStack;
+	static public Class class_NMSItemStack;
+	static private Class<?> class_NBTTagCompound;
+	static private String versionPrefix = "";
+	static private boolean supportSetGlow = false;
+	// ..and my own version-dependent classes & methods
+	static private Class<?> class_UnbreakableEnch; 
+	static private Method method_clearOldUnbreakable;
+	static {
+		try {
+			String className = Bukkit.getServer().getClass().getName();
+			String[] packages = className.split("\\.");
+			if (packages.length == 5) {
+				versionPrefix = packages[3];
+			}
+			class_CraftItemStack = Class.forName ("org.bukkit.craftbukkit." + versionPrefix + ".inventory.CraftItemStack");
+			class_NMSItemStack = Class.forName ("net.minecraft.server." + versionPrefix + ".ItemStack");
+			class_NBTTagCompound = Class.forName ("net.minecraft.server." + versionPrefix + ".NBTTagCompound");
+
+			// Load the right unbreakable enchantment class first
+			String UE_Name = "com.yahoo.phil_work.unbreakable.UnbreakableEnch" + versionPrefix;
+			// System.out.println ("Looking for enchantment class: '" + UE_Name + "'");
+
+			Unbreakable.class.getClassLoader().loadClass (UE_Name);
+			class_UnbreakableEnch = Class.forName (UE_Name);
+			method_clearOldUnbreakable =  class_UnbreakableEnch.getMethod ("clearOldUnbreakable", int.class);
+		}
+		catch (ClassNotFoundException ex) {
+			System.err.println ("Unbreakable unable to find enchantment class for Bukkit API version: " + versionPrefix);
+			class_CraftItemStack = null;
+			class_NMSItemStack = null;
+			class_NBTTagCompound = null;
+			class_UnbreakableEnch = null;
+		}
+		catch (Exception ex) {
+			class_CraftItemStack = null;
+			class_NMSItemStack = null;
+			class_NBTTagCompound = null;
+			class_UnbreakableEnch = null;
+		}
+		
+		// THought was added in  1.7.9, and making at least this backward compat. Guess not
+		try {
+			supportSetGlow = (ItemMeta.class.getMethod ("setGlow", boolean.class) != null);
+		} catch (Exception ex) {
+			supportSetGlow = false;
+		}
+	}	
+
  	static {
  		try {
 			Field f = Enchantment.class.getDeclaredField("acceptingNew");
@@ -118,120 +172,38 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	}			
 
 	static {
-	    try {  
-	        if (UnbreakableEnch.alreadyRegistered(UB_ID)) {
+		if (class_UnbreakableEnch != null) try {  
+	    	// Have to use this bcs can't have static methods in an interface.
+	    	Method _alreadyReg = class_UnbreakableEnch.getMethod ("alreadyRegistered", int.class);
+	    	Constructor _UnbreakableEnch = class_UnbreakableEnch.getConstructor (int.class,int.class);
+	    	
+	        if ((boolean)(_alreadyReg.invoke (null /*static*/, UB_ID))) {
 		        System.out.println ("Unbreakable: cleaning up on reload....");
 				clearOBStatics();
-				UnbreakableEnch.clearOldUnbreakable(UB_ID); // clear NMS statics
+				clearNMSStatics();	
 			}
-			UNBREAKABLE = new UnbreakableEnch (UB_ID, UB_Weight);
+			UNBREAKABLE = (UnbreakableEnch) _UnbreakableEnch.newInstance (UB_ID, UB_Weight);
 		} catch (IllegalArgumentException ex) {
 		      System.err.println ("Unbreakable: duplicate enchantment id! (" + UB_ID + ")");
 		      ex.printStackTrace();
 		      UNBREAKABLE = null;
-		}
+		} catch (Exception ex) {
+		      ex.printStackTrace();
+		      UNBREAKABLE = null;
+		}		
 	
 		if (UNBREAKABLE != null)
 			UNBREAKABLE.updateAnvilList();
 	}
-
-	public static boolean isHelmet (Material type) {
-		switch (type) {
-			case LEATHER_HELMET:
-			case IRON_HELMET:
-			case GOLD_HELMET: 
-			case DIAMOND_HELMET:
-			case CHAINMAIL_HELMET:
-				return true;
-			default:
-				return false;
+	static private void clearNMSStatics () {
+		try {
+			if (method_clearOldUnbreakable != null)
+				method_clearOldUnbreakable.invoke (null/*static*/,UB_ID); // clear NMS statics
+		} catch (Exception ex) { 
+			ex.printStackTrace();	
 		}
 	}
 
-	public static boolean isBoots (Material type) {
-		switch (type) {
-			case LEATHER_BOOTS:
-			case IRON_BOOTS:
-			case GOLD_BOOTS: 
-			case DIAMOND_BOOTS:
-			case CHAINMAIL_BOOTS:
-				return true;
-			default:
-				return false;
-		}
-	}
-	public static boolean isChestplate (Material type) {
-		switch (type) {
-			case LEATHER_CHESTPLATE:
-			case IRON_CHESTPLATE:
-			case GOLD_CHESTPLATE: 
-			case DIAMOND_CHESTPLATE:
-			case CHAINMAIL_CHESTPLATE:
-				return true;
-			default:
-				return false;
-		}
-	}
-	public static boolean isLeggings (Material type) {
-		switch (type) {
-			case LEATHER_LEGGINGS:
-			case IRON_LEGGINGS:
-			case GOLD_LEGGINGS: 
-			case DIAMOND_LEGGINGS:
-			case CHAINMAIL_LEGGINGS:
-				return true;
-			default:
-				return false;
-		}
-	}
-	// Should check BARDING (horse armor) but don't today
-	public static boolean isArmor (Material type) {
-		return isHelmet(type) || isChestplate (type) || isLeggings(type) || isBoots (type);
-	}
-	public static boolean isWeapon (Material type) {
-		switch (type) {
-			case IRON_SWORD:
-			case STONE_SWORD:
-			case GOLD_SWORD: 
-			case DIAMOND_SWORD:
-			case WOOD_SWORD:
-			case BOW:
-				return true;
-			default:
-				return false;
-		}
-	}
-	public static boolean isTool (Material type) {
-		switch (type) {
-			case IRON_SPADE:
-			case STONE_SPADE:
-			case GOLD_SPADE: 
-			case DIAMOND_SPADE:
-			case WOOD_SPADE:
-			case IRON_HOE:
-			case STONE_HOE:
-			case GOLD_HOE: 
-			case DIAMOND_HOE:
-			case WOOD_HOE:
-			case IRON_PICKAXE:
-			case STONE_PICKAXE:
-			case GOLD_PICKAXE: 
-			case DIAMOND_PICKAXE:
-			case WOOD_PICKAXE:
-			case IRON_AXE:
-			case STONE_AXE:
-			case GOLD_AXE: 
-			case DIAMOND_AXE:
-			case WOOD_AXE:
-			case SHEARS:
-			case FLINT_AND_STEEL:
-			case FISHING_ROD:
-			case CARROT_STICK:
-				return true;
-			default:
-				return false;
-		}
-	}
 	private boolean isActiveInWorld (String w) {
 		final String configItem = "Auto fix worldlist";
 		
@@ -253,32 +225,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			
 			
 
-	static private Class<?> class_CraftItemStack;
-	static private Class<?> class_NMSItemStack;
-	static private String versionPrefix = "";
-	static private boolean supportSetGlow = false;
-	static {
-		try {
-			String className = Bukkit.getServer().getClass().getName();
-			String[] packages = className.split("\\.");
-			if (packages.length == 5) {
-				versionPrefix = packages[3] + ".";
-			}
-			class_CraftItemStack = Class.forName ("org.bukkit.craftbukkit." + versionPrefix + "inventory.CraftItemStack");
-			class_NMSItemStack = Class.forName ("net.minecraft.server." + versionPrefix + "ItemStack");
-		}
-		catch (Exception ex) {
-			class_CraftItemStack = null;
-			class_NMSItemStack = null;
-		}
-		
-		// THought was added in  1.7.9, and making at least this backward compat. Guess not
-		try {
-			supportSetGlow = (ItemMeta.class.getMethod ("setGlow", boolean.class) != null);
-		} catch (Exception ex) {
-			supportSetGlow = false;
-		}
-	}	
 	private ItemStack addUnbreakable (final ItemStack item) {
 		return setUnbreakable (item, true);
 	}
@@ -288,7 +234,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	//returns a COPY of item that has unbreakable tag set
 	private ItemStack setUnbreakable (final ItemStack item, boolean value) {
 		// should use class_NMSItemStack.getMethod for each of .method() calls, but that's busy!
-		net.minecraft.server.v1_7_R3.ItemStack nms;
+		// net.minecraft.server.v1_7_R3.ItemStack nms; // REFLECTION NEEDED
+		Object nmsItem;
 		boolean addedName = false;
 		
 		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
@@ -302,14 +249,17 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		// Use reflection to avoid static initializer errors for static methods, before we can print nice messages.
 		try {
 			Method _asNMSCopy = class_CraftItemStack.getMethod("asNMSCopy", Class.forName ("org.bukkit.inventory.ItemStack"));
-			nms = (net.minecraft.server.v1_7_R3.ItemStack) (_asNMSCopy.invoke (null /*static method*/, item));
+			// REFLECTION NEEDED
+			nmsItem = (_asNMSCopy.invoke (null /*static method*/, item));
+			// nms = (net.minecraft.server.v1_7_R3.ItemStack) (_asNMSCopy.invoke (null /*static method*/, item));
 		}
 		catch (Exception ex) {
 			ex.printStackTrace();
 			return item;
 		}
-		
-		if ( !nms.hasTag()) {
+
+/**  Below code performs the following non-reflective code
+		if (  !nms.hasTag()) {
 			String name = nms.getName();
 			nms.c (name); // creates a tag, too
 			addedName = true;
@@ -318,10 +268,36 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (addedName) {
 			nms.t(); //removes name
 		}
+**/		
+		try 
+		{
+			Method _hasTag = class_NMSItemStack.getMethod ("hasTag");
+			Method _getName = class_NMSItemStack.getMethod ("getName");
+			Method _c = class_NMSItemStack.getMethod ("c", String.class);
+			Method _t = class_NMSItemStack.getMethod ("t");
+			Method _getTag = class_NMSItemStack.getMethod ("getTag");
+			Method _setBoolean = class_NBTTagCompound.getMethod ("setBoolean", String.class, boolean.class);
+			
+			if ( !(boolean)(_hasTag.invoke (nmsItem))) {
+				String name = (String)(_getName.invoke (nmsItem));
+				_c.invoke (nmsItem, name);
+				addedName = true;
+			}
+			Object _nbt = _getTag.invoke (nmsItem);
+			_setBoolean.invoke (_nbt, "Unbreakable", value);
+			if (addedName) {
+				_t.invoke (nmsItem);
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			return item;
+		}
+ 	
+		
 		//*DEBUG*/ log.info ("addUnbreakable(" + item.getType() +") = " + nms.getTag());
 		try {
-			Method _asCraftMirror = class_CraftItemStack.getMethod("asCraftMirror", nms.getClass());
-			return (ItemStack) _asCraftMirror.invoke (null /*static method*/, nms);
+			Method _asCraftMirror = class_CraftItemStack.getMethod("asCraftMirror", class_NMSItemStack);
+			return (ItemStack) _asCraftMirror.invoke (null /*static method*/, nmsItem);
 		}
 		catch (Exception ex) {
 			ex.printStackTrace();
@@ -333,9 +309,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	}
 	
 	boolean isUnbreakable (final ItemStack item) {
-		net.minecraft.server.v1_7_R3.ItemStack nms;
+		//		net.minecraft.server.v1_7_R3.ItemStack nms;
+		Object nmsItem;
 		boolean addedName = false;
 		
+		if (item == null || item.getType() == Material.AIR)
+			return false;
+			
 		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
 			log.severe ("Cannot run; not version 1.7.2/3/9");
 			return false;
@@ -344,13 +324,32 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		// Use reflection to avoid static initializer errors for static methods, before we can print nice messages.
 		try {
 			Method _asNMSCopy = class_CraftItemStack.getMethod("asNMSCopy", Class.forName ("org.bukkit.inventory.ItemStack"));
-			nms = (net.minecraft.server.v1_7_R3.ItemStack) ( _asNMSCopy.invoke (null /*static method*/, item) );
+			nmsItem = ( _asNMSCopy.invoke (null /*static method*/, item) );
+			if (nmsItem == null) {
+				log.warning ("Error checking item " + item);
+				return false;
+			}
 		}
 		catch (Exception ex) {
 			ex.printStackTrace();
 			return false;
 		}
-		return nms.hasTag() && nms.getTag().getBoolean ("Unbreakable");
+		try {
+			Method _hasTag = class_NMSItemStack.getMethod ("hasTag");
+			Method _getBoolean = class_NBTTagCompound.getMethod ("getBoolean", String.class);
+			Method _getTag = class_NMSItemStack.getMethod ("getTag");
+			
+			boolean hasTag = (boolean)(_hasTag.invoke (nmsItem));
+			if ( !hasTag)
+				return false;
+			Object _nbt = _getTag.invoke (nmsItem);			
+			hasTag = (boolean)(_getBoolean.invoke (_nbt, "Unbreakable"));
+
+			return hasTag;
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			return false;
+		}
 	}	
 
 	// Add unbreakable to the book
@@ -395,11 +394,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			return false;
 			
 		Material m = item.getType();		
-		if (isWeapon (m))
+		if (MaterialCategory.isWeapon (m))
 			return getConfig().getBoolean ("Protect weapons");
-		else if (isTool(m))
+		else if (MaterialCategory.isTool(m))
 			return getConfig().getBoolean ("Protect tools");
-		else if (isArmor(m))
+		else if (MaterialCategory.isArmor(m))
 			return getConfig().getBoolean ("Protect armor");
 		else 
 			return false;
@@ -420,11 +419,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 
 		// It is, but check permissions
 		Material m = item.getType();		
-		if (isWeapon (m) && player.isPermissionSet ("unbreakable.weapons") && !player.hasPermission ("unbreakable.weapons")) {
+		if (MaterialCategory.isWeapon (m) && player.isPermissionSet ("unbreakable.weapons") && !player.hasPermission ("unbreakable.weapons")) {
 			log.fine (player.getName() + " doesn't have unbreakable.weapons");
 			return false;
 		}
-		else if (isTool(m) && player.isPermissionSet ("unbreakable.tools") && !player.hasPermission ("unbreakable.tools")) {
+		else if (MaterialCategory.isTool(m) && player.isPermissionSet ("unbreakable.tools") && !player.hasPermission ("unbreakable.tools")) {
 			log.fine (player.getName() + " doesn't have unbreakable.tools");
 			return false;
 		}
@@ -475,7 +474,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (! isActiveInWorld (player.getLocation().getWorld().getName()))
 			return;
 
-		if ( !(isArmor (m) || isWeapon (m) || isTool (m))) {
+		if ( !(MaterialCategory.isArmor (m) || MaterialCategory.isWeapon (m) || MaterialCategory.isTool (m))) {
 			log.warning ("How could an unrepairable  " + m + " break??");
 			return;
 		} else
@@ -500,13 +499,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					Material m = unbreakableItem.getType();
 					PlayerInventory inventory = player.getInventory();
 
-					if (isBoots (m)) // check that boots slot is empty
+					if (MaterialCategory.isBoots (m)) // check that boots slot is empty
 						inventory.setBoots (unbreakableItem);
-					else if (isChestplate (m))
+					else if (MaterialCategory.isChestplate (m))
 						inventory.setChestplate (unbreakableItem);
-					else if (isLeggings (m))
+					else if (MaterialCategory.isLeggings (m))
 						inventory.setLeggings (unbreakableItem);
-					else if (isHelmet (m))
+					else if (MaterialCategory.isHelmet (m))
 						inventory.setHelmet (unbreakableItem);
 					else // was similar to ItemInHand
 						inventory.setItemInHand (unbreakableItem);
@@ -624,10 +623,52 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			case PLACE_ONE:
 			case SWAP_WITH_CURSOR:
 			case MOVE_TO_OTHER_INVENTORY: // could be.. 
+			case HOTBAR_SWAP:
+			case HOTBAR_MOVE_AND_READD:
 				isPlace = true;
 				break;
 			default:
 				break;
+		}
+		
+		/* Check if right clicking to place.
+		 *  If so, then make sure that original stack and new stack are both Unbreakable
+		 */
+		if (isPlace && (action == InventoryAction.PLACE_ONE || action == InventoryAction.PLACE_SOME)) {
+			ItemStack newStack = event.getCurrentItem();
+			final ItemStack srcStack = event.getCursor();
+			
+			if (isUnbreakable (srcStack)) {
+				final int slot = event.getRawSlot();
+				HumanEntity human = event.getWhoClicked();
+				final Player player = (Player)human; 
+				
+				if (!(human instanceof Player)) {
+					log.warning (human + " clicked on anvil, not a Player");
+					return;
+				}
+				// log.info ("Shift-placing an unbreakable " + srcStack + " into slot " + slot + " with " + newStack);
+
+				class RightclickRunner extends BukkitRunnable {
+					@Override
+					public void run() {
+						ItemStack makeUnbreakable = player.getOpenInventory().getItem (slot);
+						
+						if (makeUnbreakable == null || makeUnbreakable.getType() != srcStack.getType()) {
+							log.warning ("Expected " + srcStack.getType() + "; got " + makeUnbreakable);
+							return;
+						}
+						if ( !player.isOnline()) {
+							log.info (language.get (player, "loggedoff", "{0} logged off before we could give him his unbreakable {1}", player.getName(), makeUnbreakable.getType()));
+							return;
+						}
+						makeUnbreakable = addUnbreakable (makeUnbreakable);
+						log.info ("Saved split unbreakable " +  makeUnbreakable.getType() + " for " + player.getName());
+					}
+				}
+				(new RightclickRunner()).runTaskLater(this, 1);	// one tic should be long enough to destroy item
+				
+			}
 		}
 	
 		if (inv.getType()== InventoryType.ANVIL && event.getSlotType() == SlotType.CRAFTING) {
@@ -871,7 +912,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	public void onDisable()
 	{
 		clearOBStatics();
-		UnbreakableEnch.clearOldUnbreakable(UB_ID); // clear NMS statics
+		clearNMSStatics();
 	}
 	
 	@Override
@@ -890,7 +931,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			
 			// items only have repair cost after they are used. Should add isTool(), but that's huge
 			if (inHand == null || 
-				!(m == Material.BOOK || isArmor (m) || isWeapon (m) || isTool (m)) ) {
+				!(m == Material.BOOK || MaterialCategory.isArmor (m) || MaterialCategory.isWeapon (m) || MaterialCategory.isTool (m)) ) {
 				player.sendMessage (language.get (player, "needItem", chatName + ": Need a repairable item in hand"));
 				return false;
 			}
