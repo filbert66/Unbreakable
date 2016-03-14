@@ -21,6 +21,9 @@
  *  11 Jun 2014 : PSW : Added isProtectedByLore, sound on pickup event, PlayerItemHeldEvent
  *  29 Aug 2014 : PSW : Add right-click monitor to ensure both still Unbreakable; MaterialCategory
  *  01 Sep 2014 : PSW : New reflection to pick right version-specific enchantment class
+ *  20 Aug 2015 : PSW : Added 1.8 API compatibility
+ *  24 Aug 2015 : PSW : Made enchant table work.
+ *  25 Aug 2015 : PSW : use library addNewLanguages().
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -91,6 +94,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	static public Class class_NMSItemStack;
 	static private Class<?> class_NBTTagCompound;
 	static private String versionPrefix = "";
+	static private final String compatibleVersions = "1.7, 1.8"; // , or 1.9
 	static private boolean supportSetGlow = false;
 	// ..and my own version-dependent classes & methods
 	static private Class<?> class_UnbreakableEnch; 
@@ -238,8 +242,15 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		Object nmsItem;
 		boolean addedName = false;
 		
-		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
-			log.severe ("Cannot run; not version 1.7.2/3/9");
+		String class_NMSItemStack_removeNameMethod = "";
+		if (class_CraftItemStack == null)
+			return item;
+		else if (versionPrefix.startsWith ("v1_7")) 
+			class_NMSItemStack_removeNameMethod = "t";
+		else if (versionPrefix.startsWith ("v1_8") || versionPrefix.startsWith ("v1_9")) 
+			class_NMSItemStack_removeNameMethod = "r";
+		else {
+			log.severe ("Cannot run; not version " + compatibleVersions);
 			return item;
 		}
 		if (getConfig().getBoolean ("Also repair"))
@@ -271,11 +282,17 @@ public class Unbreakable extends JavaPlugin implements Listener {
 **/		
 		try 
 		{
+			@SuppressWarnings("unchecked")
 			Method _hasTag = class_NMSItemStack.getMethod ("hasTag");
+			@SuppressWarnings("unchecked")
 			Method _getName = class_NMSItemStack.getMethod ("getName");
-			Method _c = class_NMSItemStack.getMethod ("c", String.class);
-			Method _t = class_NMSItemStack.getMethod ("t");
+			@SuppressWarnings("unchecked")
+			Method _c = class_NMSItemStack.getMethod ("c", String.class); //setName
+			@SuppressWarnings("unchecked")
+			Method _t = class_NMSItemStack.getMethod (class_NMSItemStack_removeNameMethod); // 'r' in 1.8_r3
+			@SuppressWarnings("unchecked")
 			Method _getTag = class_NMSItemStack.getMethod ("getTag");
+			@SuppressWarnings("unchecked")
 			Method _setBoolean = class_NBTTagCompound.getMethod ("setBoolean", String.class, boolean.class);
 			
 			if ( !(boolean)(_hasTag.invoke (nmsItem))) {
@@ -286,15 +303,14 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			Object _nbt = _getTag.invoke (nmsItem);
 			_setBoolean.invoke (_nbt, "Unbreakable", value);
 			if (addedName) {
-				_t.invoke (nmsItem);
+				_t.invoke (nmsItem); // remove name
 			}
+			//*DEBUG*/ log.info ("addUnbreakable(" + item.getType() +") = " + _nbt);
 		} catch (Exception ex) {
 			ex.printStackTrace();
 			return item;
 		}
  	
-		
-		//*DEBUG*/ log.info ("addUnbreakable(" + item.getType() +") = " + nms.getTag());
 		try {
 			Method _asCraftMirror = class_CraftItemStack.getMethod("asCraftMirror", class_NMSItemStack);
 			return (ItemStack) _asCraftMirror.invoke (null /*static method*/, nmsItem);
@@ -316,8 +332,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (item == null || item.getType() == Material.AIR)
 			return false;
 			
-		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
-			log.severe ("Cannot run; not version 1.7.2/3/9");
+		if (class_CraftItemStack == null || !(versionPrefix.startsWith ("v1_7") || versionPrefix.startsWith ("v1_8") ||  || versionPrefix.startsWith ("v1_9"))) {
+			log.severe ("Cannot run; not version " + compatibleVersions);
 			return false;
 		}
 		// NMS hacking begins!
@@ -335,8 +351,10 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			return false;
 		}
 		try {
+			@SuppressWarnings("unchecked")
 			Method _hasTag = class_NMSItemStack.getMethod ("hasTag");
 			Method _getBoolean = class_NBTTagCompound.getMethod ("getBoolean", String.class);
+			@SuppressWarnings("unchecked")
 			Method _getTag = class_NMSItemStack.getMethod ("getTag");
 			
 			boolean hasTag = (boolean)(_hasTag.invoke (nmsItem));
@@ -534,7 +552,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			log.info ("enchanting Unbreakable in " + player.getLocation().getWorld().getName() + " is off");
 			return;
 		}
-
+		//* DEBUG */ log.info ("enchantMonitor (" + item + ")");
+			
 		int enchants = 0;
 		for (Enchantment ench : event.getEnchantsToAdd().keySet()) {
 			if (added && !UNBREAKABLE.canApplyTogether (ench.getId())) {
@@ -542,12 +561,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				event.setExpLevelCost (event.getExpLevelCost() - event.getEnchantsToAdd().get(ench));
 				continue; // skip if can't add other
 			}
-			
-			if (item.getType()== Material.ENCHANTED_BOOK) {
-				int levels = event.getExpLevelCost(); 
+			int levels = event.getExpLevelCost(); 
+			boolean substituteUB = UNBREAKABLE.getIfNextEnchantUnbreakable (levels);
+			//* DEBUG */ log.info ("enchantMonitor: next enchant Unbreakable = " + substituteUB);
 
+			if (item.getType()== Material.ENCHANTED_BOOK) {
 				// Decide whether or not to change the enchantment on the book to mine...			
-				if (UNBREAKABLE.getIfNextEnchantUnbreakable (levels)) {
+				if (substituteUB) {
 					added = true;
 					item = storeUnbreakable (player, item);
 					event.setExpLevelCost (UNBREAKABLE.getMinXP (1));
@@ -556,6 +576,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				else
 					item.addUnsafeEnchantment (ench, event.getEnchantsToAdd().get(ench));
 				  **/
+			} else if (!added && substituteUB) {
+				/* MC 1.8 enchant mechanics don't use UB now, so have to check ourselves and 
+				 *  override an enchant
+				 */
+				ench = Enchantment.getById (UB_ID);
+				if (ench == null)
+					log.warning ("Cannot find OB.Enchantment for Unbreakable");
 			} else if (ench.getId() != UB_ID) {
 			    // adding my enchant works, but if then item placed in enchanting table, it crashes client
 				// add other enchantments to my copy or there are none when I give copy back
@@ -858,32 +885,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	/*
 	 * Startup/Shutdown routines
 	 */	
-	private void addNewLanguages () {
-		final String pluginPath = "plugins"+ getDataFolder().separator + getDataFolder().getName() + getDataFolder().separator;
-
-		try {  //iterate through added languages
-			String classURL = this.getClass().getResource(this.getName()+".class").toString();
-			String jarName = classURL.substring (classURL.lastIndexOf (':') + 1, classURL.indexOf ('!'));
-			ZipInputStream jar = new ZipInputStream (new FileInputStream (jarName));
-			if (jar != null) {
-				ZipEntry e = jar.getNextEntry();
-				while (e != null)   {
-					String name = e.getName();
-					if (name.startsWith ("languages/") && !new File (pluginPath + name).exists()) 
-					{
-						saveResource (name, false);
-						log.info ("Adding language file: " + name);
-					}
-					e = jar.getNextEntry();
-				}
-			}
-			else 
-				log.warning ("Unable to open jar file");						
-		} catch (Exception ex) {
-			log.warning ("Unable to process language files: " + ex);		
-		}	
-	}
-	
 	public void onEnable()
 	{
 		log = this.getLogger();
@@ -897,16 +898,16 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			log.info ("No config found in " + pluginPath + "; writing defaults");
 			saveDefaultConfig();
 		}
-		addNewLanguages();		
+		language.addNewLanguages();		
 
 		if (UNBREAKABLE == null)
 			return;
 		String serverVer = this.getServer().getBukkitVersion();
-		if (serverVer.startsWith ("1.7.2-R0.") || serverVer.startsWith ("1.7.9-R0.") ) {
+		if (serverVer.startsWith ("1.7.2-R0.") || serverVer.startsWith ("1.7.9-R0.") || serverVer.startsWith ("1.8.")) {
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
 		} else
-			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with 1.7.9 (today)")); // was 2-R0.2/3
+			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with 1.7.[2,9] or 1.8 (today)")); // was 2-R0.2/3
 	}
 	
 	public void onDisable()

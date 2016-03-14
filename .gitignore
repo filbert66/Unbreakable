@@ -8,3 +8,15 @@ src/main/java/com/yahoo/phil_work/unbreakable/build
 testprep
 
 update
+
+src/main/java/com/yahoo/phil_work/unbreakable/enchantment/build
+
+spigprep
+
+src/main/java/com/yahoo/phil_work/unbreakable/enchantment/build
+
+.gitignore
+
+.gitignore
+
+src/main/java/com/yahoo/phil_work/unbreakable/enchantment/build
