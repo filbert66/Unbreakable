@@ -24,7 +24,8 @@
  *  20 Aug 2015 : PSW : Added 1.8 API compatibility
  *  24 Aug 2015 : PSW : Made enchant table work.
  *  25 Aug 2015 : PSW : use library addNewLanguages().
- *  06 Mar 2016 : PSW : Began adding 1.9 compatibility: new Sounds enums, use spigot().setUnbreakable(), use *MainHand()
+ *  06 Mar 2016 : PSW : Began adding 1.9 compatibility: new Sounds enums, use spigot().setUnbreakable();
+ *  21 Mar 2016 : PSW : More 1.9: use *MainHand()
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -543,8 +544,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 						inventory.setLeggings (unbreakableItem);
 					else if (MaterialCategory.isHelmet (m))
 						inventory.setHelmet (unbreakableItem);
-					else // was similar to ItemInHand
-						inventory.setItemInHand (unbreakableItem);
+					else // was similar to Item	
+						inventory.setItemInMainHand (unbreakableItem);
 						
 					if (getConfig().getBoolean ("Message on making unbreakable"))
 						player.sendMessage (language.get (player, "saved", chatName +": Your {0} is now unbreakable", unbreakableItem.getType()));
@@ -556,6 +557,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		}
 	}
 	
+	// Needs work
 	@EventHandler (ignoreCancelled = true)
 	void enchantMonitor (EnchantItemEvent event) {
 		Player player = event.getEnchanter();
@@ -945,10 +947,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				return false;
 			}
 			Player player = (Player)sender;
-			ItemStack inHand = player.getInventory().getItemInHand();
+			ItemStack inHand = player.getInventory().getItemInMainHand(); 
 			Material m = inHand != null ? inHand.getType() : null;
 			
-			// items only have repair cost after they are used. Should add isTool(), but that's huge
 			if (inHand == null || 
 				!(m == Material.BOOK || MaterialCategory.isArmor (m) || MaterialCategory.isWeapon (m) || MaterialCategory.isTool (m)) ) {
 				player.sendMessage (language.get (player, "needItem", chatName + ": Need a repairable item in hand"));
@@ -967,7 +968,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}		
 			//*DEBUG*/log.info ("newItem = "+ newItem);	
 			player.sendMessage (language.get (player, "saved", chatName + ": Your {0} is now unbreakable", m));
-			player.getInventory().setItemInHand (newItem);
+			player.getInventory().setItemInMainHand (newItem);
 			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
 					  "{0} just enchanted a {1} with UNBREAKABLE", player.getName(), m));
 			return true;

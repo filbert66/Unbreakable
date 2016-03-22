@@ -36,7 +36,18 @@ public class UnbreakableEnchv1_9_R1 extends Enchantment implements UnbreakableEn
 	private int id;
 	private int unbreakingId = 0;
 	
-	public UnbreakableEnchv1_9_R1 (int id, Enchantment.Rarity rarity)  {
+	static final private Enchantment.Rarity getRarity (int r) {
+		for (Enchantment.Rarity rarity : Enchantment.Rarity.values()) 
+			if (rarity.a() == r) 
+				return rarity;	
+		System.out.println ("Unbreakable: unknown rarity (" + r + ")");		
+		return null;		
+	}
+	public UnbreakableEnchv1_9_R1 (int id, int rarity)  {	
+		this (id, getRarity (rarity));
+	}
+	
+	protected UnbreakableEnchv1_9_R1 (int id, Enchantment.Rarity rarity)  {
 		super(rarity, EnchantmentSlotType.BREAKABLE, new EnumItemSlot[] { EnumItemSlot.MAINHAND } ); 
 		this.c (keyName); // 	changed from b
 		this.id = id;
@@ -49,7 +60,7 @@ public class UnbreakableEnchv1_9_R1 extends Enchantment implements UnbreakableEn
 		// need to make sure that is AcceptingRegistrations
         org.bukkit.enchantments.Enchantment.registerEnchantment(new org.bukkit.craftbukkit.v1_9_R1.enchantments.CraftEnchantment(this));
 	}
-	
+
 	public static boolean alreadyRegistered (int id) {
 		try {
 			Enchantment e = Enchantment.c(id);  // calls enchantments.getId()
@@ -91,7 +102,8 @@ public class UnbreakableEnchv1_9_R1 extends Enchantment implements UnbreakableEn
 				System.out.println ("Unbreakable: cleaned up enchantment registry...");
 		    }
 		} catch (Exception ignored) {
-			System.err.println (ignored + "\nUnbreakable: cannot clear old enchantment; suggest server restart");		
+			System.err.println (ignored + "\nUnbreakable: cannot clear old enchantment; suggest server restart");	
+			// TODO: Find out why this is triggering on reload.	
 	    }
 	}
 	// expected to be called by static section of instantiator
