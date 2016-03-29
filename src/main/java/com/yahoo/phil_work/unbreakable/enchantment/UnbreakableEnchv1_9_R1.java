@@ -205,9 +205,9 @@ public class UnbreakableEnchv1_9_R1 extends Enchantment implements UnbreakableEn
 	@Override 
 	public int a(int i) {
 		//*DEBUG*/ System.out.println ("UnbreakableEnch.a(" + i + ")");
-        return 25;  // Only one level, fix it pretty high
+        return 3;  // Only one level, fix it pretty high
     }
-	//      * Returns the maximum value of enchantability nedded on the enchantment level passed.
+	//      * Returns the maximum value of enchantability needed on the enchantment level passed.
 	@Override
 	public int b (int i) {
 		//*DEBUG*/ System.out.println ("UnbreakableEnch.b(" + i + ")");

@@ -3,13 +3,16 @@
 # 22 Jan 2014 : PSW : Added softdepend, website
 # 20 Feb 2014 : PSW : Added unbreakable command
 # 23 Feb 2014 : PSW : Split out unbreakable.anvil from .ench
+# 28 Mar 2016 : PSW : 4.1 changed default perm on armor/weapons/tools to false
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 4.0.1
+version: 4.1
 author: filbert66
 description: Stops armor and tools from breaking
 softdepend: [LanguagesAPI]
+# Until Update with new MaterialCategory 
+loadbefore: [AntiCreeper, AntiFire]
 website: dev.bukkit.org/bukkit-plugins/unbreakableitems
 
 permissions:
@@ -24,13 +27,13 @@ permissions:
       unbreakable.anvil: true
   unbreakable.armor:
     description: Auto protect this user's armor as unbreakable
-    default: true
+    default: false
   unbreakable.weapons:
     description: Auto protect user's weapons as unbreakable
-    default: true
+    default: false
   unbreakable.tools:
     description: Auto protect user's tools as unbreakable
-    default: true
+    default: false
   unbreakable.cmd:
     description: Allows enchanting held item with Unbreakable by command
     default: op

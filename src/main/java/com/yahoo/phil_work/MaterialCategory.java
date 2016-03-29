@@ -1,3 +1,8 @@
+/****
+* 30 Jul 2015 : PSW : Added isRepairable(), isAnvilRepairable()
+* 28 Mar 2016 : PSW : 1.9- added ELYTRA, SHIELD
+*/
+
 package com.yahoo.phil_work;
 
 import org.bukkit.Material;
@@ -77,6 +82,7 @@ public class MaterialCategory {
 			case FLINT_AND_STEEL:
 			case FISHING_ROD:
 			case CARROT_STICK:
+			case SHIELD:
 				return true;
 			default:
 				return false;
@@ -145,5 +151,94 @@ public class MaterialCategory {
 			default: 
 				return false;
 		}
+	}
+	// Returns true if can be repaired in crafting window by combining
+	public static boolean isRepairable (Material type) {
+		return (type.getMaxDurability() > 0);
+	}
+	public static boolean isAnvilRepairable (Material type) {
+		if (! isRepairable(type))
+			return false;
+
+		// now catch unrepairable items
+		switch (type) {
+			case BOW:
+			case SHEARS:
+			case FLINT_AND_STEEL:
+			case FISHING_ROD:
+			case CARROT_STICK:
+				return false;
+			default:
+				return true;
+		}
+	}
+
+	// Returns the raw material that can be used for repair of this item, or null
+	public static Material getRawMaterial (Material item) {
+		switch (item) {
+			case DIAMOND_BARDING:
+			case DIAMOND_BOOTS:
+			case DIAMOND_CHESTPLATE:
+			case DIAMOND_HELMET:
+			case DIAMOND_LEGGINGS:
+			case DIAMOND_AXE:
+			case DIAMOND_HOE:
+			case DIAMOND_PICKAXE:
+			case DIAMOND_SPADE:
+			case DIAMOND_SWORD:
+				return Material.DIAMOND;
+				
+			case GOLD_BARDING: 
+			case GOLD_BOOTS: 
+			case GOLD_CHESTPLATE: 
+			case GOLD_HELMET: 
+			case GOLD_LEGGINGS: 
+			case GOLD_AXE: 
+			case GOLD_HOE: 
+			case GOLD_PICKAXE: 
+			case GOLD_SPADE: 
+			case GOLD_SWORD: 
+				return Material.GOLD_INGOT;
+				
+			case CHAINMAIL_BOOTS:
+			case CHAINMAIL_CHESTPLATE:
+			case CHAINMAIL_HELMET:
+			case CHAINMAIL_LEGGINGS:
+			case IRON_AXE:
+			case IRON_HOE:
+			case IRON_PICKAXE:
+			case IRON_SPADE:
+			case IRON_SWORD:
+			case IRON_BARDING:
+			case IRON_BOOTS:
+			case IRON_CHESTPLATE:
+			case IRON_HELMET:
+			case IRON_LEGGINGS:
+				return Material.IRON_INGOT;
+				
+			case STONE_AXE:
+			case STONE_HOE:
+			case STONE_PICKAXE:
+			case STONE_SPADE:
+			case STONE_SWORD:
+				return Material.STONE;
+				
+			case WOOD_AXE:
+			case WOOD_HOE:
+			case WOOD_PICKAXE:
+			case WOOD_SPADE:
+			case WOOD_SWORD:
+				return Material.WOOD;
+				
+			case LEATHER_BOOTS:
+			case LEATHER_CHESTPLATE:
+			case LEATHER_HELMET:
+			case LEATHER_LEGGINGS:
+				return Material.LEATHER;
+				
+			case ELYTRA:
+				return Material.LEATHER;
+		}
+		return null;
 	}
 }

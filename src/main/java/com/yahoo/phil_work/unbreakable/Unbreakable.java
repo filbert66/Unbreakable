@@ -26,6 +26,7 @@
  *  25 Aug 2015 : PSW : use library addNewLanguages().
  *  06 Mar 2016 : PSW : Began adding 1.9 compatibility: new Sounds enums, use spigot().setUnbreakable();
  *  21 Mar 2016 : PSW : More 1.9: use *MainHand()
+ *  22 Mar 2016 : PSW : Fix anvil.
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
