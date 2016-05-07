@@ -7,16 +7,27 @@ Also repair: true
 Anvil enchant delay sec: 5
 Anvil enchant cost: 3
 
+Hide Unbreakable: false
+
 #
+# If not set, worldlists default to ALL
 # Enchanting worldlist:
 # - world
 # Lore unbreakable string: Unbreakable
 
+# Below is added to Unbreakable enchanted items
+# Enchant lore: 
+# - line 1
+# - line 2
+# - line 3
+# - line 4
+
 Protect armor: true
 Protect tools: true
 Protect weapons: true
+
 #
-# Following only effective if one or more of above three set true
+# Following only effective if one or more of 'Protect *' set true
 #
 
 # Auto fix worldlist:

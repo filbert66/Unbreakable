@@ -4,10 +4,11 @@
 # 20 Feb 2014 : PSW : Added unbreakable command
 # 23 Feb 2014 : PSW : Split out unbreakable.anvil from .ench
 # 28 Mar 2016 : PSW : 4.1 changed default perm on armor/weapons/tools to false
+# 07 May 2016 : PSW : Added permission-message for /unbk
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 4.1
+version: 4.2
 author: filbert66
 description: Stops armor and tools from breaking
 softdepend: [LanguagesAPI]
@@ -50,4 +51,5 @@ commands:
     description: enchants held item with Unbreakable
     usage: Use when holding repairable item with sufficient XP 
     permission: unbreakable.cmd
+    permission-message: You do not have permission to use /<command>>
   

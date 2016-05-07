@@ -27,6 +27,7 @@
  *  06 Mar 2016 : PSW : Began adding 1.9 compatibility: new Sounds enums, use spigot().setUnbreakable();
  *  21 Mar 2016 : PSW : More 1.9: use *MainHand()
  *  22 Mar 2016 : PSW : Fix anvil.
+ *  07 May 2016 : PSW : Added "Hide Unbreakable", addAnyLore(). Allow for blank book lore.
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -45,6 +46,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Constructor;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedList;
 import java.util.logging.Logger;
 import java.util.zip.*;
 import java.util.HashMap;
@@ -250,6 +252,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			ItemStack newItem = item.clone();
 			ItemMeta meta = item.getItemMeta();
 			meta.spigot().setUnbreakable (value);
+			if (getConfig().getBoolean ("Hide Unbreakable", false))
+				meta.addItemFlags (ItemFlag.HIDE_UNBREAKABLE);
+			meta = addAnyLore (meta);
 			newItem.setItemMeta (meta);
 			return newItem;
 		}
@@ -268,7 +273,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		}
 		if (getConfig().getBoolean ("Also repair"))
 			item.setDurability ((short)0); // durability goes from 0(new) to max
-	
+
+		ItemMeta meta = item.getItemMeta();	
+		if (getConfig().getBoolean ("Hide Unbreakable", false))
+			meta.addItemFlags (ItemFlag.HIDE_UNBREAKABLE);
+		meta = addAnyLore (meta);
+		item.setItemMeta (meta);
+
 		// NMS hacking begins!
 		// Use reflection to avoid static initializer errors for static methods, before we can print nice messages.
 		try {
@@ -396,18 +407,28 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			return addUnbreakable (item);
 
 		item.addUnsafeEnchantment (Enchantment.getById (UB_ID), 1);
+		item = addUnbreakable (item); // is being lost when moving
 		ItemMeta enchStore = item.getItemMeta();
+		
+		// must add book lore after above, since addUnbreakable can now add/overwrite lore
 		String[] Lore = {language.get (p, "bookLore1", "storing 'Unbreakable'"), 
 			language.get (p, "bookLore2", "will auto-enchant after {0}s when", getConfig().getInt ("Anvil enchant delay sec")),
 			language.get (p, "bookLore3", "in anvil with Repairable"),
 			language.get (p, "bookLore4", "enchant cost: {0}", getConfig().getInt ("Anvil enchant cost")) };
-		enchStore.setLore (java.util.Arrays.asList (Lore));
+		List<String> loreList = new LinkedList<String> (java.util.Arrays.asList (Lore));
+		// remove blank lines
+		for (int i=loreList.size()-1; i >= 0; i--) 
+			if (loreList.get (i).isEmpty()) {
+				log.fine ("removing lore line#" + i);
+				loreList.remove (i); 
+			}
+		enchStore.setLore (loreList);
 		/* Causing client to crash; can't find name? So using addUnsafeEnchant()
 		 * enchStore.addStoredEnchant (Enchantment.getById (UB_ID), 1, false);
 		 */
+		enchStore.setItemFlags (ItemFlags.HIDE_ENCHANTS);
 		if ( !item.setItemMeta (enchStore))
 			log.warning ("failed to set itemMeta on book");
-		item = addUnbreakable (item); // is being lost when moving
 		return item;
 	}
 	
@@ -556,6 +577,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}
 			(new ReplaceRunner()).runTaskLater(this, 1);	// one tic should be long enough to destroy item
 		}
+	}
+	ItemMeta addAnyLore (ItemMeta meta) {
+		if (getConfig().isSet ("Enchant lore")) 
+			meta.setLore (getConfig().getStringList ("Enchant lore"));
+		return meta;
 	}
 	
 	// Needs work
@@ -751,6 +777,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				/**if (supportSetGlow)
 					tool.getItemMeta().setGlow (true);
 				else**/
+				if (! tool.getItemMeta().hasEnchants())
 					tool.addEnchantment (Enchantment.DURABILITY, 1); // for glowies
 					
 				final ItemStack unbreakableItem = addUnbreakable (tool);
