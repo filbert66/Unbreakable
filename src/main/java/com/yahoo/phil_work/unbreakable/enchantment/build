@@ -1,7 +1,10 @@
 #
 # Aslo build the older version
 sed s/v1_7_R3/v1_7_R1/ < UnbreakableEnchv1_7_R3.java > UnbreakableEnchv1_7_R1.java
+sed s/v1_9_R1/v1_9_R2/ < UnbreakableEnchv1_9_R1.java > UnbreakableEnchv1_9_R2.java
+#
 javac -Xlint:unchecked -Xlint:-deprecation -classpath ~/Dropbox/minecraft_code/AntiCreeper/bin/Anticreeper.jar:../../../../../../../../../minecraft-server/craftbukkit-1.7.9-R0.2.jar:../../../../../../../../../minecraft-server/craftbukkit-1.7.2-R0.3.jar:../../../../../../../../../minecraft-server/MC_Server/plugins/LanguageAPI.jar UnbreakableEnch.java *1_7*.java
 javac -Xlint:unchecked -Xlint:-deprecation -classpath ~/Dropbox/minecraft_code/AntiCreeper/bin/Anticreeper.jar:../../../../../../../../../spigot/craftbukkit-1.8.7.jar:../../../../../../../../../spigot/craftbukkit-1.8.7.jar:../../../../../../../../../minecraft-server/MC_Server/plugins/LanguageAPI.jar UnbreakableEnch.java *1_8*.java 
-javac -Xlint:unchecked -Xlint:-deprecation -classpath ~/Dropbox/minecraft_code/AntiCreeper/bin/Anticreeper.jar:../../../../../../../../../spigot/craftbukkit-1.9.jar:../../../../../../../../../minecraft-server/MC_Server/plugins/LanguageAPI.jar UnbreakableEnch.java *1_9*.java 
-rm UnbreakableEnchv1_7_R1.java
+javac -Xlint:unchecked -Xlint:-deprecation -classpath ~/Dropbox/minecraft_code/AntiCreeper/bin/Anticreeper.jar:../../../../../../../../../spigot/craftbukkit-1.9.jar:../../../../../../../../../minecraft-server/MC_Server/plugins/LanguageAPI.jar UnbreakableEnch.java *1_9_R1.java 
+javac -Xlint:unchecked -Xlint:-deprecation -classpath ~/Dropbox/minecraft_code/AntiCreeper/bin/Anticreeper.jar:../../../../../../../../../spigot/craftbukkit-1.9.4.jar:../../../../../../../../../minecraft-server/MC_Server/plugins/LanguageAPI.jar UnbreakableEnch.java *1_9_R2.java 
+rm UnbreakableEnchv1_7_R1.java UnbreakableEnchv1_9_R2.java

@@ -28,6 +28,7 @@
  *  21 Mar 2016 : PSW : More 1.9: use *MainHand()
  *  22 Mar 2016 : PSW : Fix anvil.
  *  07 May 2016 : PSW : Added "Hide Unbreakable", addAnyLore(). Allow for blank book lore.
+ *  12 May 2016 : PSW : Hide_Enchants when only Unbreaking for glowies; remove that if another enchant added.
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -426,7 +427,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		/* Causing client to crash; can't find name? So using addUnsafeEnchant()
 		 * enchStore.addStoredEnchant (Enchantment.getById (UB_ID), 1, false);
 		 */
-		enchStore.setItemFlags (ItemFlags.HIDE_ENCHANTS);
+		enchStore.addItemFlags (ItemFlag.HIDE_ENCHANTS);
 		if ( !item.setItemMeta (enchStore))
 			log.warning ("failed to set itemMeta on book");
 		return item;
@@ -658,7 +659,10 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				/**if (supportSetGlow)
 					item.getItemMeta().setGlow (true);
 				else**/
-					item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if none other enchs
+					item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if no other enchs
+					ItemMeta meta = item.getItemMeta();
+					meta.addItemFlags (ItemFlag.HIDE_ENCHANTS);
+					item.setItemMeta (meta);
 			}
 			((EnchantingInventory)event.getInventory()).setItem (item); // unsafe, but we know it's enchantment
 			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
@@ -691,6 +695,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		// log.info ("InventoryClickEvent " +event.getAction()+" in type " + inv.getType() + " in  slot " + event.getRawSlot() + "(raw " + event.getSlot());
 		InventoryAction action = event.getAction();
 		boolean isPlace = false;
+		boolean isPickup = false;
 		switch (action) {
 			case PLACE_ALL:
 			case PLACE_SOME:
@@ -701,6 +706,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			case HOTBAR_MOVE_AND_READD:
 				isPlace = true;
 				break;
+			case PICKUP_ALL:
+			case PICKUP_SOME:
+			case PICKUP_HALF:
+			case PICKUP_ONE:
+				isPickup = true;
 			default:
 				break;
 		}
@@ -745,7 +755,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}
 		}
 	
-		if (inv.getType()== InventoryType.ANVIL && event.getSlotType() == SlotType.CRAFTING) {
+		if (inv.getType()== InventoryType.ANVIL && 
+			(event.getSlotType() == SlotType.CRAFTING || event.getSlotType() == SlotType.RESULT) )
+		{
 			ItemStack[] anvilContents = inv.getContents();
 			ItemStack slot0 = anvilContents[0];
 			ItemStack slot1 = anvilContents[1];
@@ -764,8 +776,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			// 0 is left slot of Anvil
 			if (slot0 != null && slot0.getItemMeta() instanceof Repairable)
 				tool = slot0;
-			//log.info ("Found book: " + book + "; tool: " + tool);
+			log.info ("Found book: " + book + "; tool: " + tool);
 		}
+
 		if (book != null && tool != null && isPlace)
 		{ // then might be using a book with UNBREAKABLE
 			// log.info ("Enchanting a " + tool.getType() + " with an ANVIL");
@@ -777,8 +790,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				/**if (supportSetGlow)
 					tool.getItemMeta().setGlow (true);
 				else**/
-				if (! tool.getItemMeta().hasEnchants())
+				if (! tool.getItemMeta().hasEnchants()) {
 					tool.addEnchantment (Enchantment.DURABILITY, 1); // for glowies
+					ItemMeta meta = tool.getItemMeta();
+					meta.addItemFlags (ItemFlag.HIDE_ENCHANTS);
+					tool.setItemMeta (meta);
+				}
 					
 				final ItemStack unbreakableItem = addUnbreakable (tool);
 				final HumanEntity human = event.getWhoClicked();
@@ -849,6 +866,65 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}
 			else {
 				// log.info ("No Unbreakable in: " + ((EnchantmentStorageMeta)book.getItemMeta()).getStoredEnchants().keySet());
+			}
+			
+		// Check for adding enchant to already Unbreakable item
+		} else if (isPickup && event.getSlotType() == SlotType.RESULT) {
+			ItemStack result = event.getCurrentItem().clone(); // avoid race condition
+		
+			log.info ("Picked up result " + result);
+			ItemMeta meta = result.getItemMeta();
+			if (isUnbreakable (result) && meta.hasEnchant (Enchantment.DURABILITY) && meta.getEnchants().size() > 1)
+			{ // have more than one enchant and don't need Durability for glowies
+				meta.removeEnchant (Enchantment.DURABILITY);
+				meta.removeItemFlags (ItemFlag.HIDE_ENCHANTS);
+				result.setItemMeta (meta);
+
+				final ItemStack unbreakableItem = result;
+				final HumanEntity human = event.getWhoClicked();
+				final Player player = (Player)human; 
+				
+				if (!(human instanceof Player)) {
+					log.warning (human + " clicked on anvil, not a Player");
+					return;
+				}
+				/** Don't check cause not adding it.
+				else if ( !player.hasPermission ("unbreakable.anvil")) {
+					player.sendMessage (language.get (player, "noPerm", 
+										"You don't have permission to enchant with " + chatName + " books"));
+					return;
+				}
+				***/
+
+				class MetaRunner extends BukkitRunnable {
+					@Override
+					public void run() {
+						if (unbreakableItem == null)
+							return;
+						if ( !player.isOnline()) {
+							log.info (language.get (player, "loggedoff", "{0} logged off before we could give him his unbreakable {1}", player.getName(), unbreakableItem.getType()));
+							return;
+						}
+						if (player.getOpenInventory().getTopInventory().getType() != InventoryType.ANVIL) {
+							/*DEBUG*/log.info (player.getName() + " closed inventory before enchant occurred");
+							return;
+						}
+						AnvilInventory aInventory = (AnvilInventory)player.getOpenInventory().getTopInventory();
+						InventoryView pInventory = player.getOpenInventory();
+
+						// Make sure we should still do this, that result still ready
+						if (pInventory.getCursor() == null || pInventory.getCursor().getType() == Material.AIR) {
+							/*DEBUG*/log.info ("Empty cursor slot " + pInventory.getCursor().getType()  + " for Unbreakable+ result");
+							return;
+						}		
+						// Execute swap of item without Unbreaking and HIDE_ENCHANTs
+						pInventory.setCursor (unbreakableItem);
+						
+						log.info ("Cleared Unbreaking off of a " + unbreakableItem.getType() + " with UNBREAKABLE");
+					}
+				}
+				if (player != null)
+					(new MetaRunner()).runTaskLater(this, 1);		
 			}
 		}
 	}
