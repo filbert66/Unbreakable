@@ -29,6 +29,8 @@
  *  22 Mar 2016 : PSW : Fix anvil.
  *  07 May 2016 : PSW : Added "Hide Unbreakable", addAnyLore(). Allow for blank book lore.
  *  12 May 2016 : PSW : Hide_Enchants when only Unbreaking for glowies; remove that if another enchant added.
+ *  11 Jun 2016 : PSW : 1.10 compatibility using supportSpigotUnbreakable
+ *                    : clickInventory()- Added armor & shield equip check.
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -100,8 +102,10 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	static public Class class_NMSItemStack;
 	static private Class<?> class_NBTTagCompound;
 	static private String versionPrefix = "";
-	static private final String compatibleVersions = "1.7, 1.8, or 1.9"; 
+	static private final String compatibleVersions = "1.7, 1.8, 1.9 or 1.10"; 
 	static private boolean supportSetGlow = false;
+	static private boolean supportSpigotUnbreakable = false;
+	
 	// ..and my own version-dependent classes & methods
 	static private Class<?> class_UnbreakableEnch; 
 	static private Method method_clearOldUnbreakable;
@@ -123,6 +127,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			Unbreakable.class.getClassLoader().loadClass (UE_Name);
 			class_UnbreakableEnch = Class.forName (UE_Name);
 			method_clearOldUnbreakable =  class_UnbreakableEnch.getMethod ("clearOldUnbreakable", int.class);
+			
+			supportSpigotUnbreakable = (ItemMeta.Spigot.class.getMethod ("setUnbreakable", boolean.class) != null);
 		}
 		catch (ClassNotFoundException ex) {
 			System.err.println ("Unbreakable unable to find enchantment class for Bukkit API version: " + versionPrefix);
@@ -249,7 +255,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		boolean addedName = false;
 
 		// Begin Spigot 1.9
-		if (versionPrefix.startsWith ("v1_8") || versionPrefix.startsWith ("v1_9")) {
+		if (supportSpigotUnbreakable) {
 			ItemStack newItem = item.clone();
 			ItemMeta meta = item.getItemMeta();
 			meta.spigot().setUnbreakable (value);
@@ -266,8 +272,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			return item;
 		else if (versionPrefix.startsWith ("v1_7")) 
 			class_NMSItemStack_removeNameMethod = "t";
-		else if (versionPrefix.startsWith ("v1_8") || versionPrefix.startsWith ("v1_9")) 
-			class_NMSItemStack_removeNameMethod = "r";
 		else {
 			log.severe ("Cannot run; not version " + compatibleVersions);
 			return item;
@@ -351,7 +355,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	
 	boolean isUnbreakable (final ItemStack item) {
 		// Begin Spigot 1.9
-		if (versionPrefix.startsWith ("v1_8") || versionPrefix.startsWith ("v1_9")) {
+		if (supportSpigotUnbreakable) {
 			ItemMeta meta = item.getItemMeta();
 			return meta.spigot().isUnbreakable ();
 		}
@@ -364,7 +368,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (item == null || item.getType() == Material.AIR)
 			return false;
 			
-		if (class_CraftItemStack == null || !(versionPrefix.startsWith ("v1_7") || versionPrefix.startsWith ("v1_8") || versionPrefix.startsWith ("v1_9"))) {
+		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
 			log.severe ("Cannot run; not version " + compatibleVersions);
 			return false;
 		}
@@ -687,11 +691,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		ItemStack book = null;
 		ItemStack tool = null;
 		Inventory inv = event.getInventory();
+		HumanEntity human = event.getWhoClicked();
 		final Enchantment OB_Unbreakable = Enchantment.getById (UB_ID);
 
-		if ( !isEnchantingInWorld (event.getWhoClicked().getLocation().getWorld().getName()))
-			return;
-				
 		// log.info ("InventoryClickEvent " +event.getAction()+" in type " + inv.getType() + " in  slot " + event.getRawSlot() + "(raw " + event.getSlot());
 		InventoryAction action = event.getAction();
 		boolean isPlace = false;
@@ -715,6 +717,101 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				break;
 		}
 		
+		// Check if equipping armor or shield
+		final int SHIELD_CLICK_SLOT = 45;
+		final int SHIELD_SLOT = 40;
+		if ((event.getSlotType() == SlotType.ARMOR && isPlace) ||
+		 	(inv.getType() == InventoryType.CRAFTING && isPlace && event.getRawSlot() == SHIELD_CLICK_SLOT ) || 
+		    (inv.getType() == InventoryType.CRAFTING && event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY && 
+		     (MaterialCategory.isArmor (event.getCurrentItem().getType()) || event.getCurrentItem().getType() == Material.SHIELD)
+		    ))
+		{
+			// log.info ("Armor change " + action + " in slot " + event.getSlot() + " curr item " + event.getCurrentItem() + " with " + event.getCursor() + " on cursor");
+			// log.info ("Found in raw slot " + event.getRawSlot() + ": " + event.getView ().getItem(event.getRawSlot()));
+			final Player player = (Player)human; 
+				
+			if (!(human instanceof Player)) {
+				log.warning (human + " clicked on anvil, not a Player");
+				return;
+			}
+			PlayerInventory pinv = player.getInventory();
+			ItemStack item = null;
+			
+			// Get new armor item
+			switch (action) {
+				case PLACE_ALL:
+				case PLACE_SOME:
+				case PLACE_ONE:
+				case SWAP_WITH_CURSOR:
+					item = event.getCursor();
+					break;
+				case MOVE_TO_OTHER_INVENTORY: 
+					item = event.getCurrentItem();
+					Material m = item.getType();
+					if (MaterialCategory.isHelmet(m) && pinv.getHelmet() != null)
+						return;
+					if (MaterialCategory.isChestplate(m) && pinv.getChestplate() != null)
+						return;
+					if (MaterialCategory.isLeggings(m) && pinv.getLeggings() != null)
+						return;
+					if (MaterialCategory.isBoots(m) && pinv.getBoots() != null)
+						return;
+					if (m == Material.SHIELD && pinv.getItem (SHIELD_SLOT) != null)
+						return;
+					//log.info ("Confirmed moving " + item.getType() + " to open armor slot");
+					break;
+				case HOTBAR_SWAP:
+				case HOTBAR_MOVE_AND_READD:	
+					item = pinv.getItem (event.getHotbarButton());
+					break;
+				default:
+					log.warning ("unprocessed armor move action: " + action);
+					break;
+			}
+			log.info ("Found new armor: " + item);
+			
+			if (item != null)	{
+				final Player p = player;
+				final ItemStack fixMe = item;
+			
+				class armorFixer extends BukkitRunnable {
+					@Override
+					public void run() {
+						if ( !player.isOnline()) {
+							log.info (language.get (player, "loggedoff", "{0} logged off before we could give him his unbreakable {1}", player.getName(), fixMe.getType()));
+							return;
+						}
+						PlayerInventory pInventory = p.getInventory();
+						boolean found = false;
+						
+						// Find item
+						ItemStack armor[] = pInventory.getArmorContents();
+						for (int j = 0; !found && j < armor.length; j++) {
+							ItemStack i = armor[j]; // BUG: how is this getting to be null??
+							if (i != null && i.isSimilar (fixMe)) // apparently cursor is quantity 0 in this case
+							{ 
+								armor[j] = addUnbreakable (i);
+								found = true;
+							}
+						}
+						if (found) 
+							pInventory.setArmorContents (armor);				
+						else  { // might be shield
+							ItemStack shield = pInventory.getItem (SHIELD_SLOT); 
+							if (shield != null && shield.isSimilar (fixMe)) {
+								pInventory.setItem (SHIELD_SLOT, addUnbreakable (shield));
+							} else	
+								log.warning ("Cannot find armor to fix: " + fixMe);
+						}  
+					}
+				}
+				
+				if (isProtectedItem (p, item) && !isUnbreakable(item))
+					(new armorFixer()).runTaskLater(this,1);		
+			}
+			return; // armor equip
+		}
+
 		/* Check if right clicking to place.
 		 *  If so, then make sure that original stack and new stack are both Unbreakable
 		 */
@@ -724,7 +821,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			
 			if (isUnbreakable (srcStack)) {
 				final int slot = event.getRawSlot();
-				HumanEntity human = event.getWhoClicked();
 				final Player player = (Player)human; 
 				
 				if (!(human instanceof Player)) {
@@ -755,6 +851,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}
 		}
 	
+		if ( !isEnchantingInWorld (event.getWhoClicked().getLocation().getWorld().getName()))
+			return;
+				
 		if (inv.getType()== InventoryType.ANVIL && 
 			(event.getSlotType() == SlotType.CRAFTING || event.getSlotType() == SlotType.RESULT) )
 		{
@@ -798,7 +897,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				}
 					
 				final ItemStack unbreakableItem = addUnbreakable (tool);
-				final HumanEntity human = event.getWhoClicked();
 				final Player player = (Player)human; 
 				
 				if (!(human instanceof Player)) {
@@ -881,7 +979,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				result.setItemMeta (meta);
 
 				final ItemStack unbreakableItem = result;
-				final HumanEntity human = event.getWhoClicked();
 				final Player player = (Player)human; 
 				
 				if (!(human instanceof Player)) {
@@ -914,17 +1011,17 @@ public class Unbreakable extends JavaPlugin implements Listener {
 
 						// Make sure we should still do this, that result still ready
 						if (pInventory.getCursor() == null || pInventory.getCursor().getType() == Material.AIR) {
-							/*DEBUG*/log.info ("Empty cursor slot " + pInventory.getCursor().getType()  + " for Unbreakable+ result");
+							//*DEBUG*/log.info ("Empty cursor slot " + pInventory.getCursor().getType()  + " for Unbreakable+ result");
 							return;
 						}		
 						// Execute swap of item without Unbreaking and HIDE_ENCHANTs
 						pInventory.setCursor (unbreakableItem);
 						
-						log.info ("Cleared Unbreaking off of a " + unbreakableItem.getType() + " with UNBREAKABLE");
+						// log.info ("Cleared Unbreaking off of a " + unbreakableItem.getType() + " with UNBREAKABLE");
 					}
 				}
 				if (player != null)
-					(new MetaRunner()).runTaskLater(this, 1);		
+					(new MetaRunner()).runTaskLater(this, 2);		
 			}
 		}
 	}
@@ -1027,7 +1124,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (UNBREAKABLE == null)
 			return;
 		String serverVer = this.getServer().getBukkitVersion();
-		if (serverVer.startsWith ("1.7.2-R0.") || serverVer.startsWith ("1.7.9-R0.") || serverVer.startsWith ("1.8.") || serverVer.startsWith ("1.9")) {
+		if (serverVer.startsWith ("1.7.2-R0.") || serverVer.startsWith ("1.7.9-R0.") || supportSpigotUnbreakable) {
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
 		} else

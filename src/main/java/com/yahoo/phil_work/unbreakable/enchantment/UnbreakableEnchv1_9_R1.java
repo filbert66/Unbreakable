@@ -31,7 +31,7 @@ import net.minecraft.server.v1_9_R1.EnumItemSlot;
 public class UnbreakableEnchv1_9_R1 extends Enchantment implements UnbreakableEnch {
 	private static Random rnd = new Random (java.lang.System.currentTimeMillis());
 	private static Enchantment[] b;
-	private static String EnchantmentArrayName = "b"; // changed from c
+	//private static String EnchantmentArrayName = "b"; // changed from c
 	private static final String keyName = "unbreakable";
 	private int id;
 	private int unbreakingId = 0;
