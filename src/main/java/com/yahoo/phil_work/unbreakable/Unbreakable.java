@@ -105,7 +105,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	static private final String compatibleVersions = "1.7, 1.8, 1.9 or 1.10"; 
 	static private boolean supportSetGlow = false;
 	static private boolean supportSpigotUnbreakable = false;
-	
+	static { try {	
+		supportSpigotUnbreakable =  (ItemMeta.class.getDeclaredClasses().length > 0) &&
+									(ItemMeta.Spigot.class.getMethod ("setUnbreakable", boolean.class) != null);
+		} catch (Exception ex) {
+			System.out.println ("This server doesn't support Spigot.setUnbreakable; using reflection");
+		}
+	}
 	// ..and my own version-dependent classes & methods
 	static private Class<?> class_UnbreakableEnch; 
 	static private Method method_clearOldUnbreakable;
@@ -127,11 +133,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			Unbreakable.class.getClassLoader().loadClass (UE_Name);
 			class_UnbreakableEnch = Class.forName (UE_Name);
 			method_clearOldUnbreakable =  class_UnbreakableEnch.getMethod ("clearOldUnbreakable", int.class);
-			
-			supportSpigotUnbreakable = (ItemMeta.Spigot.class.getMethod ("setUnbreakable", boolean.class) != null);
 		}
 		catch (ClassNotFoundException ex) {
-			System.err.println ("Unbreakable unable to find enchantment class for Bukkit API version: " + versionPrefix);
+			System.err.println ("Unbreakable unable to find enchantment class for Bukkit API version: " + versionPrefix + ":" + ex);
 			class_CraftItemStack = null;
 			class_NMSItemStack = null;
 			class_NBTTagCompound = null;
@@ -272,6 +276,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			return item;
 		else if (versionPrefix.startsWith ("v1_7")) 
 			class_NMSItemStack_removeNameMethod = "t";
+		else if (versionPrefix.startsWith ("v1_8")) 
+			class_NMSItemStack_removeNameMethod = "r";
 		else {
 			log.severe ("Cannot run; not version " + compatibleVersions);
 			return item;
@@ -368,7 +374,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (item == null || item.getType() == Material.AIR)
 			return false;
 			
-		if (class_CraftItemStack == null || !versionPrefix.startsWith ("v1_7")) {
+		if (class_CraftItemStack == null || !(versionPrefix.startsWith ("v1_7") || versionPrefix.startsWith ("v1_8"))) {
 			log.severe ("Cannot run; not version " + compatibleVersions);
 			return false;
 		}
@@ -768,7 +774,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					log.warning ("unprocessed armor move action: " + action);
 					break;
 			}
-			log.info ("Found new armor: " + item);
+			// log.info ("Found new armor: " + item);
 			
 			if (item != null)	{
 				final Player p = player;
@@ -951,7 +957,14 @@ public class Unbreakable extends JavaPlugin implements Listener {
 						// Execute enchant
 						aInventory.clear(0);aInventory.clear(1);  // Enchant occurred; remove tool and book
 						pInventory.setCursor (unbreakableItem);
-						player.playSound (player.getLocation(), Sound.BLOCK_ANVIL_USE, 1.0F, 1.0F);
+						
+						Sound sound;
+						try {
+							sound = Sound.valueOf ("ANVIL_USE");
+						} catch (Exception ex) { // 1.9 and later
+							sound = Sound.valueOf ("BLOCK_ANVIL_USE");
+						}
+						player.playSound (player.getLocation(), sound, 1.0F, 1.0F);
 						
 						if (getConfig().getBoolean ("Message on enchant"))
 							player.sendMessage (language.get (player, "saved", chatName + ": Your {0} is now unbreakable", unbreakableItem.getType()));
@@ -1057,7 +1070,14 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			p.getInventory().addItem (addUnbreakable (item)); // don't check for success bcs we know this worked by fact that this event was called
 			if (getConfig().getBoolean ("Message on making unbreakable"))
 				p.sendMessage (language.get (p, "saved", chatName +": Your {0} is now unbreakable", item.getType()));
-			p.playSound (p.getLocation(), Sound.ENTITY_ITEM_PICKUP, 10.0F, 10);
+
+			Sound sound;
+			try {
+				sound = Sound.valueOf ("ITEM_PICKUP");
+			} catch (Exception ex) { // 1.9 and later
+				sound = Sound.valueOf ("ENTITY_ITEM_PICKUP");
+			}
+			p.playSound (p.getLocation(), sound, 10.0F, 10);
 		}
 	}
 
@@ -1124,11 +1144,15 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (UNBREAKABLE == null)
 			return;
 		String serverVer = this.getServer().getBukkitVersion();
-		if (serverVer.startsWith ("1.7.2-R0.") || serverVer.startsWith ("1.7.9-R0.") || supportSpigotUnbreakable) {
+		if (serverVer.startsWith ("1.7.2-R0.") || 
+			serverVer.startsWith ("1.7.9-R0.") || 
+			serverVer.startsWith ("1.8") || 
+			supportSpigotUnbreakable) 
+		{
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
 		} else
-			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with " + compatibleVersions)); // was 2-R0.2/3
+			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with {0}", compatibleVersions)); // was 2-R0.2/3
 	}
 	
 	public void onDisable()
