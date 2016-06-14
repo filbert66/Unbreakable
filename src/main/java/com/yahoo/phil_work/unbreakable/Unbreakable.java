@@ -31,6 +31,7 @@
  *  12 May 2016 : PSW : Hide_Enchants when only Unbreaking for glowies; remove that if another enchant added.
  *  11 Jun 2016 : PSW : 1.10 compatibility using supportSpigotUnbreakable
  *                    : clickInventory()- Added armor & shield equip check.
+ *  13 Jun 2016 : PSW : 1.8 backward compatibility
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -110,6 +111,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 									(ItemMeta.Spigot.class.getMethod ("setUnbreakable", boolean.class) != null);
 		} catch (Exception ex) {
 			System.out.println ("This server doesn't support Spigot.setUnbreakable; using reflection");
+		}
+	}
+	static private boolean SUPPORT_SHIELD;
+	static { try { 	
+			SUPPORT_SHIELD = (Material.valueOf ("SHIELD") != null);
+		} catch (Exception ex) {
+			SUPPORT_SHIELD = false;
 		}
 	}
 	// ..and my own version-dependent classes & methods
@@ -242,8 +250,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		// default to true everywhere if not configured
 			return true;
 	}
-			
-			
+	private boolean isRepairable (ItemStack i) {
+		return (i != null && i.getItemMeta() instanceof Repairable);
+	}		
 
 	private ItemStack addUnbreakable (final ItemStack item) {
 		return setUnbreakable (item, true);
@@ -544,7 +553,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (! isActiveInWorld (player.getLocation().getWorld().getName()))
 			return;
 
-		if ( !(MaterialCategory.isArmor (m) || MaterialCategory.isWeapon (m) || MaterialCategory.isTool (m))) {
+		if ( !isRepairable (newItem)) {
 			log.warning ("How could an unrepairable  " + m + " break??");
 			return;
 		} else
@@ -729,7 +738,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if ((event.getSlotType() == SlotType.ARMOR && isPlace) ||
 		 	(inv.getType() == InventoryType.CRAFTING && isPlace && event.getRawSlot() == SHIELD_CLICK_SLOT ) || 
 		    (inv.getType() == InventoryType.CRAFTING && event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY && 
-		     (MaterialCategory.isArmor (event.getCurrentItem().getType()) || event.getCurrentItem().getType() == Material.SHIELD)
+		     (MaterialCategory.isArmor (event.getCurrentItem().getType()) || 
+		       (SUPPORT_SHIELD && event.getCurrentItem().getType() == Material.SHIELD) )
 		    ))
 		{
 			// log.info ("Armor change " + action + " in slot " + event.getSlot() + " curr item " + event.getCurrentItem() + " with " + event.getCursor() + " on cursor");
@@ -762,7 +772,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 						return;
 					if (MaterialCategory.isBoots(m) && pinv.getBoots() != null)
 						return;
-					if (m == Material.SHIELD && pinv.getItem (SHIELD_SLOT) != null)
+					if (SUPPORT_SHIELD && m == Material.SHIELD && pinv.getItem (SHIELD_SLOT) != null)
 						return;
 					//log.info ("Confirmed moving " + item.getType() + " to open armor slot");
 					break;
@@ -802,12 +812,14 @@ public class Unbreakable extends JavaPlugin implements Listener {
 						}
 						if (found) 
 							pInventory.setArmorContents (armor);				
-						else  { // might be shield
+						else if (SUPPORT_SHIELD) { // might be shield
 							ItemStack shield = pInventory.getItem (SHIELD_SLOT); 
 							if (shield != null && shield.isSimilar (fixMe)) {
 								pInventory.setItem (SHIELD_SLOT, addUnbreakable (shield));
 							} else	
 								log.warning ("Cannot find armor to fix: " + fixMe);
+						} else	{
+							log.warning ("Cannot find armor to fix: " + fixMe);
 						}  
 					}
 				}
@@ -879,7 +891,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			if (slot1 != null && slot1.getType() == Material.ENCHANTED_BOOK)
 				book = slot1;
 			// 0 is left slot of Anvil
-			if (slot0 != null && slot0.getItemMeta() instanceof Repairable)
+			if (isRepairable (slot0))
 				tool = slot0;
 			log.info ("Found book: " + book + "; tool: " + tool);
 		}
@@ -1160,23 +1172,29 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		clearOBStatics();
 		clearNMSStatics();
 	}
-	
+
+	static boolean SUPPORT_MAINHAND;
+	static { try { 
+		SUPPORT_MAINHAND = PlayerInventory.class.getMethod ("getItemInMainHand") != null;
+	} catch (Exception ex) { 
+		SUPPORT_MAINHAND = false;
+	} }	
 	@Override
     public boolean onCommand(CommandSender sender, Command command, String commandLabel, String[] args) {
         String commandName = command.getName().toLowerCase();
         String[] trimmedArgs = args;
-								   
+						   
 		if (commandName.equals("unbk")) {
 			if (!(sender instanceof Player)) {
 				sender.sendMessage ("not supported from console");
 				return false;
 			}
 			Player player = (Player)sender;
-			ItemStack inHand = player.getInventory().getItemInMainHand(); 
+			ItemStack inHand = SUPPORT_MAINHAND ? player.getInventory().getItemInMainHand() : player.getInventory().getItemInHand();
 			Material m = inHand != null ? inHand.getType() : null;
 			
 			if (inHand == null || 
-				!(m == Material.BOOK || MaterialCategory.isArmor (m) || MaterialCategory.isWeapon (m) || MaterialCategory.isTool (m)) ) {
+				!(m == Material.BOOK || isRepairable (inHand)) ) {
 				player.sendMessage (language.get (player, "needItem", chatName + ": Need a repairable item in hand"));
 				return false;
 			}
@@ -1193,7 +1211,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			}		
 			//*DEBUG*/log.info ("newItem = "+ newItem);	
 			player.sendMessage (language.get (player, "saved", chatName + ": Your {0} is now unbreakable", m));
-			player.getInventory().setItemInMainHand (newItem);
+			if (SUPPORT_MAINHAND) 
+				player.getInventory().setItemInMainHand (newItem);
+			else
+				player.getInventory().setItemInHand (newItem);
+								
 			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
 					  "{0} just enchanted a {1} with UNBREAKABLE", player.getName(), m));
 			return true;
