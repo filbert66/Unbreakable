@@ -893,7 +893,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			// 0 is left slot of Anvil
 			if (isRepairable (slot0))
 				tool = slot0;
-			log.info ("Found book: " + book + "; tool: " + tool);
+			// log.info ("Found book: " + book + "; tool: " + tool);
 		}
 
 		if (book != null && tool != null && isPlace)
@@ -995,7 +995,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		} else if (isPickup && event.getSlotType() == SlotType.RESULT) {
 			ItemStack result = event.getCurrentItem().clone(); // avoid race condition
 		
-			log.info ("Picked up result " + result);
+			// log.info ("Picked up result " + result);
 			ItemMeta meta = result.getItemMeta();
 			if (isUnbreakable (result) && meta.hasEnchant (Enchantment.DURABILITY) && meta.getEnchants().size() > 1)
 			{ // have more than one enchant and don't need Durability for glowies
