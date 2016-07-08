@@ -2,9 +2,11 @@ loggedoff: {0} logged off before we could give him his unbreakable {1}
 noPerm: You don't have permission to enchant with §9Unbreakable§r books
 enabled: Unbreakable in force, protecting tools and armor; by Filbert66
 savedlog: Saved item {0} for {1}
-failBukkit: unable to run; only compatible with 1.7.2-R0.2/3 (today)
+failBukkit: unable to run; only compatible with {0} (today)
+failSpigot: unable to run; since 1.9+ require Spigot
 needItem: §9Unbreakable§r: Need a repairable item in hand
 saved: §9Unbreakable§r: Your {0} is now unbreakable
+gone: §9Unbreakable§r: Your {0} is now breakable
 enchanted: {0} just enchanted a {1} with UNBREAKABLE
 cancel: Unbreakable enchant cancelled
 needXP: §9Unbreakable§r: Insufficient XP

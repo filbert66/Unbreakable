@@ -32,6 +32,7 @@
  *  11 Jun 2016 : PSW : 1.10 compatibility using supportSpigotUnbreakable
  *                    : clickInventory()- Added armor & shield equip check.
  *  13 Jun 2016 : PSW : 1.8 backward compatibility
+ *  29 Jun 2016 : PSW : Added "/unbk off|false" support; fix NPE isProtectedByLore().
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -272,9 +273,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			ItemStack newItem = item.clone();
 			ItemMeta meta = item.getItemMeta();
 			meta.spigot().setUnbreakable (value);
-			if (getConfig().getBoolean ("Hide Unbreakable", false))
+			if (value == true && getConfig().getBoolean ("Hide Unbreakable", false))
 				meta.addItemFlags (ItemFlag.HIDE_UNBREAKABLE);
-			meta = addAnyLore (meta);
+			if (value == true)
+				meta = addAnyLore (meta);
+			else if (getConfig().isSet ("Enchant lore"))
+				meta.setLore (null);
 			newItem.setItemMeta (meta);
 			return newItem;
 		}
@@ -287,7 +291,10 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			class_NMSItemStack_removeNameMethod = "t";
 		else if (versionPrefix.startsWith ("v1_8")) 
 			class_NMSItemStack_removeNameMethod = "r";
-		else {
+		else if (versionPrefix.startsWith ("v1_9") || versionPrefix.startsWith ("v1_10")) {
+			log.severe ("Requires Spigot from 1.9+; no guarantees this will work");
+			class_NMSItemStack_removeNameMethod = "r";			//fail soft
+		} else {
 			log.severe ("Cannot run; not version " + compatibleVersions);
 			return item;
 		}
@@ -295,9 +302,12 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			item.setDurability ((short)0); // durability goes from 0(new) to max
 
 		ItemMeta meta = item.getItemMeta();	
-		if (getConfig().getBoolean ("Hide Unbreakable", false))
+		if (value == true && getConfig().getBoolean ("Hide Unbreakable", false))
 			meta.addItemFlags (ItemFlag.HIDE_UNBREAKABLE);
-		meta = addAnyLore (meta);
+		if (value == true)
+			meta = addAnyLore (meta);
+		else if (getConfig().isSet ("Enchant lore"))
+			meta.setLore (null);
 		item.setItemMeta (meta);
 
 		// NMS hacking begins!
@@ -383,7 +393,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (item == null || item.getType() == Material.AIR)
 			return false;
 			
-		if (class_CraftItemStack == null || !(versionPrefix.startsWith ("v1_7") || versionPrefix.startsWith ("v1_8"))) {
+		if (class_CraftItemStack == null) {
 			log.severe ("Cannot run; not version " + compatibleVersions);
 			return false;
 		}
@@ -439,7 +449,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		// remove blank lines
 		for (int i=loreList.size()-1; i >= 0; i--) 
 			if (loreList.get (i).isEmpty()) {
-				log.fine ("removing lore line#" + i);
+				//*DEBUG*/log.fine ("removing lore line#" + i);
 				loreList.remove (i); 
 			}
 		enchStore.setLore (loreList);
@@ -452,10 +462,34 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		return item;
 	}
 	
+	// Modifies the provided item by making it glow (or not)
+	// Caveat: removes Durability-1 when glowing=false
+	private void setGlowie (ItemStack item, boolean glowing) {
+		if (item == null)
+			return;
+		ItemMeta meta = item.getItemMeta();
+		
+		// When supported, check supportSetGlow and call meta.setGlow()
+		
+		if (glowing) {
+			if ( !meta.hasEnchants()) {
+				item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if no other enchs
+				meta.addItemFlags (ItemFlag.HIDE_ENCHANTS);
+			}
+		} else {
+			if (meta.getEnchantLevel (Enchantment.DURABILITY) == 1) {
+				// assume was added by me above
+				meta.removeEnchant (Enchantment.DURABILITY);
+				meta.removeItemFlags (ItemFlag.HIDE_ENCHANTS);
+			}
+		}
+		item.setItemMeta (meta);
+	}
+	
 	private boolean isProtectedByLore (ItemStack item) {
 		String trigger = getConfig().getString ("Lore unbreakable string");
 		
-		if (trigger != null && item.getItemMeta().hasLore()) {
+		if (trigger != null && item != null && item.hasItemMeta() && item.getItemMeta().hasLore()) {
 			for (String lore : item.getItemMeta().getLore()) {
 				lore.toLowerCase();
 				if (lore.contains (trigger))
@@ -678,10 +712,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				/**if (supportSetGlow)
 					item.getItemMeta().setGlow (true);
 				else**/
-					item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if no other enchs
-					ItemMeta meta = item.getItemMeta();
-					meta.addItemFlags (ItemFlag.HIDE_ENCHANTS);
-					item.setItemMeta (meta);
+				setGlowie (item, true);
 			}
 			((EnchantingInventory)event.getInventory()).setItem (item); // unsafe, but we know it's enchantment
 			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
@@ -907,12 +938,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				/**if (supportSetGlow)
 					tool.getItemMeta().setGlow (true);
 				else**/
-				if (! tool.getItemMeta().hasEnchants()) {
-					tool.addEnchantment (Enchantment.DURABILITY, 1); // for glowies
-					ItemMeta meta = tool.getItemMeta();
-					meta.addItemFlags (ItemFlag.HIDE_ENCHANTS);
-					tool.setItemMeta (meta);
-				}
+				setGlowie (tool, true);
 					
 				final ItemStack unbreakableItem = addUnbreakable (tool);
 				final Player player = (Player)human; 
@@ -1163,7 +1189,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		{
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
-		} else
+		} else if (serverVer.startsWith ("1.9") || serverVer.startsWith ("1.10"))
+			log.warning (language.get (Bukkit.getConsoleSender(), "failSpigot", "unable to run; since 1.9+ require Spigot"));
+		 else
 			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with {0}", compatibleVersions)); // was 2-R0.2/3
 	}
 	
@@ -1198,26 +1226,51 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				player.sendMessage (language.get (player, "needItem", chatName + ": Need a repairable item in hand"));
 				return false;
 			}
-			if (player.getGameMode() != org.bukkit.GameMode.CREATIVE) {
+			boolean makeUnbreakable = true; // default
+			if (args.length > 0) { // handle parameters
+				if (args[0].equalsIgnoreCase ("off") || args[0].equalsIgnoreCase ("false")) {
+					makeUnbreakable = false;
+					if ( !isUnbreakable (inHand))
+						return true; // silent fail
+				} else return false;
+			}
+			if (makeUnbreakable && player.getGameMode() != org.bukkit.GameMode.CREATIVE) {
 				if ( !hasAndDeductXP(player, inHand.getAmount() * UNBREAKABLE.getMinXP(1))) 
 					return false;
 			}
 			ItemStack newItem = inHand.clone();
-			if (m == Material.BOOK) {
-				newItem.setType (Material.ENCHANTED_BOOK);
-				newItem = storeUnbreakable (player, newItem);
+			if (m == Material.ENCHANTED_BOOK || m == Material.BOOK) { 
+				if (makeUnbreakable && m == Material.BOOK) {
+					newItem.setType (Material.ENCHANTED_BOOK);
+					newItem = storeUnbreakable (player, newItem);
+				} else if (makeUnbreakable == false && m == Material.ENCHANTED_BOOK) {
+					// undo storeUnbreakable()
+					newItem.setType (Material.BOOK);
+					newItem.removeEnchantment (Enchantment.getById (UB_ID));
+					ItemMeta meta = newItem.getItemMeta();
+					meta.setLore (null);
+					meta.removeItemFlags (ItemFlag.HIDE_ENCHANTS);
+					newItem.setItemMeta (meta);
+					newItem = setUnbreakable (newItem, false);
+				}
 			} else {
-				newItem = addUnbreakable (newItem);
+				newItem = setUnbreakable (newItem, makeUnbreakable);
+				setGlowie (newItem, makeUnbreakable);
 			}		
 			//*DEBUG*/log.info ("newItem = "+ newItem);	
-			player.sendMessage (language.get (player, "saved", chatName + ": Your {0} is now unbreakable", m));
+			if (makeUnbreakable)
+				player.sendMessage (language.get (player, "saved", chatName + ": Your {0} is now unbreakable", m));
+			else
+				player.sendMessage (language.get (player, "gone", chatName + ": Your {0} is now breakable", m));
+
 			if (SUPPORT_MAINHAND) 
 				player.getInventory().setItemInMainHand (newItem);
 			else
 				player.getInventory().setItemInHand (newItem);
 								
-			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
-					  "{0} just enchanted a {1} with UNBREAKABLE", player.getName(), m));
+			if (makeUnbreakable) 
+				log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
+						  "{0} just enchanted a {1} with UNBREAKABLE", player.getName(), m));
 			return true;
 		}		 	
 
