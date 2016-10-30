@@ -33,6 +33,7 @@
  *                    : clickInventory()- Added armor & shield equip check.
  *  13 Jun 2016 : PSW : 1.8 backward compatibility
  *  29 Jun 2016 : PSW : Added "/unbk off|false" support; fix NPE isProtectedByLore().
+ *  29 Oct 2016 : PSW : Add "Protect elytra" and "Protect shields" or just item ID??
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -510,9 +511,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if (MaterialCategory.isWeapon (m))
 			return getConfig().getBoolean ("Protect weapons");
 		else if (MaterialCategory.isTool(m))
-			return getConfig().getBoolean ("Protect tools");
+			return getConfig().getBoolean ("Protect tools"); //includes shields
 		else if (MaterialCategory.isArmor(m))
 			return getConfig().getBoolean ("Protect armor");
+		else if (m == Material.ELYTRA)
+			return getConfig().getBoolean ("Protect elytra");
 		else 
 			return false;
 	}
@@ -540,6 +543,10 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			log.fine (player.getName() + " doesn't have unbreakable.tools");
 			return false;
 		}
+		else if (m == Material.ELYTRA && player.isPermissionSet ("unbreakable.elytra") && !player.hasPermission ("unbreakable.elytra")) {
+			log.fine (player.getName() + " doesn't have unbreakable.elytra");
+			return false;
+		}		
 		// else must be armor
 		else if (player.isPermissionSet ("unbreakable.armor") && !player.hasPermission ("unbreakable.armor")) {
 			log.fine (player.getName() + " doesn't have unbreakable.armor");
@@ -766,11 +773,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		// Check if equipping armor or shield
 		final int SHIELD_CLICK_SLOT = 45;
 		final int SHIELD_SLOT = 40;
+		Material m = event.getCurrentItem() != null ? event.getCurrentItem().getType() : null;
 		if ((event.getSlotType() == SlotType.ARMOR && isPlace) ||
 		 	(inv.getType() == InventoryType.CRAFTING && isPlace && event.getRawSlot() == SHIELD_CLICK_SLOT ) || 
 		    (inv.getType() == InventoryType.CRAFTING && event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY && 
-		     (MaterialCategory.isArmor (event.getCurrentItem().getType()) || 
-		       (SUPPORT_SHIELD && event.getCurrentItem().getType() == Material.SHIELD) )
+		     (MaterialCategory.isArmor (m) || m == Material.ELYTRA || (SUPPORT_SHIELD && m == Material.SHIELD))
 		    ))
 		{
 			// log.info ("Armor change " + action + " in slot " + event.getSlot() + " curr item " + event.getCurrentItem() + " with " + event.getCursor() + " on cursor");
@@ -794,7 +801,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					break;
 				case MOVE_TO_OTHER_INVENTORY: 
 					item = event.getCurrentItem();
-					Material m = item.getType();
+					m = item.getType();
 					if (MaterialCategory.isHelmet(m) && pinv.getHelmet() != null)
 						return;
 					if (MaterialCategory.isChestplate(m) && pinv.getChestplate() != null)
@@ -855,7 +862,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					}
 				}
 				
-				if (isProtectedItem (p, item) && !isUnbreakable(item))
+				if (isProtectedItem (p, item) && !isUnbreakable(item) && 
+					(getConfig().getBoolean ("Unbreakable on hold") || item.getType() == Material.ELYTRA) )
+					// Elytra never breaks, so consider on hold/equip to always be true
 					(new armorFixer()).runTaskLater(this,1);		
 			}
 			return; // armor equip

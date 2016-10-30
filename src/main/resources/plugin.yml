@@ -5,10 +5,11 @@
 # 23 Feb 2014 : PSW : Split out unbreakable.anvil from .ench
 # 28 Mar 2016 : PSW : 4.1 changed default perm on armor/weapons/tools to false
 # 07 May 2016 : PSW : Added permission-message for /unbk
+# 29 Oct 2016 : PSW : 4.7 Added unbreakable.elytra
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 4.6
+version: 4.7
 author: filbert66
 description: Stops armor and tools from breaking
 softdepend: [LanguagesAPI]
@@ -23,17 +24,18 @@ permissions:
       unbreakable.armor: true
       unbreakable.tools: true
       unbreakable.weapons: true
+      unbreakable.elytra: true
       unbreakable.cmd: true
       unbreakable.ench: true
       unbreakable.anvil: true
   unbreakable.armor:
-    description: Auto protect this user's armor as unbreakable
+    description: Allows auto protect this user's armor as unbreakable
     default: false
   unbreakable.weapons:
-    description: Auto protect user's weapons as unbreakable
+    description: Allows auto protect user's weapons as unbreakable
     default: false
   unbreakable.tools:
-    description: Auto protect user's tools as unbreakable
+    description: Allows auto protect user's tools as unbreakable
     default: false
   unbreakable.cmd:
     description: Allows enchanting held item with Unbreakable by command
@@ -44,6 +46,9 @@ permissions:
   unbreakable.anvil:
     description: Allows enchanting an item with an Unbreakable book on anvil
     default: true
+  unbreakable.elytra: 
+    description: Allows auto protect only user's elytra as unbreakable
+    default: false
 
 commands:
   unbk:

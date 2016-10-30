@@ -25,6 +25,7 @@ Hide Unbreakable: false
 Protect armor: true
 Protect tools: true
 Protect weapons: true
+Protect elytra: true
 
 #
 # Following only effective if one or more of 'Protect *' set true
@@ -37,7 +38,7 @@ Protect weapons: true
 Unbreakable on spawn: false
 # Permissions checked for these three
 Unbreakable on pickup: false
-# Only effective for tools and weapons, may not catch armor
+#  Effective for tools and weapons, armor and elytra
 Unbreakable on hold: false
 # Checks entire player inventory
 Unbreakable on join: false
