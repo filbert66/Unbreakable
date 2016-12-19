@@ -34,6 +34,7 @@
  *  13 Jun 2016 : PSW : 1.8 backward compatibility
  *  29 Jun 2016 : PSW : Added "/unbk off|false" support; fix NPE isProtectedByLore().
  *  29 Oct 2016 : PSW : Add "Protect elytra" and "Protect shields" or just item ID??
+ *  14 Dec 2016 : PSW : 1.11 compatibility
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -105,7 +106,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	static public Class class_NMSItemStack;
 	static private Class<?> class_NBTTagCompound;
 	static private String versionPrefix = "";
-	static private final String compatibleVersions = "1.7, 1.8, 1.9 or 1.10"; 
+	static private final String compatibleVersions = "1.7, 1.8, 1.9, 1.10, 1.11"; 
 	static private boolean supportSetGlow = false;
 	static private boolean supportSpigotUnbreakable = false;
 	static { try {	
@@ -286,6 +287,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		// end Spigot 1.9
 				
 		String class_NMSItemStack_removeNameMethod = "";
+		String class_NMSItemStack_setNameMethod = "c"; //until 1.11
 		if (class_CraftItemStack == null)
 			return item;
 		else if (versionPrefix.startsWith ("v1_7")) 
@@ -295,6 +297,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		else if (versionPrefix.startsWith ("v1_9") || versionPrefix.startsWith ("v1_10")) {
 			log.severe ("Requires Spigot from 1.9+; no guarantees this will work");
 			class_NMSItemStack_removeNameMethod = "r";			//fail soft
+		} else if (versionPrefix.startsWith ("v1_11"))  { // not really needed now with supportSpigotUnbreakable
+			class_NMSItemStack_removeNameMethod = "s";
+			class_NMSItemStack_setNameMethod = "g";
 		} else {
 			log.severe ("Cannot run; not version " + compatibleVersions);
 			return item;
@@ -342,7 +347,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			@SuppressWarnings("unchecked")
 			Method _getName = class_NMSItemStack.getMethod ("getName");
 			@SuppressWarnings("unchecked")
-			Method _c = class_NMSItemStack.getMethod ("c", String.class); //setName
+			Method _c = class_NMSItemStack.getMethod (class_NMSItemStack_setNameMethod, String.class);
 			@SuppressWarnings("unchecked")
 			Method _t = class_NMSItemStack.getMethod (class_NMSItemStack_removeNameMethod); // 'r' in 1.8_r3
 			@SuppressWarnings("unchecked")
@@ -474,7 +479,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		
 		if (glowing) {
 			if ( !meta.hasEnchants()) {
-				item.addEnchantment (Enchantment.DURABILITY, 1); // to ensure glowies if no other enchs
+				meta.addEnchant (Enchantment.DURABILITY, 1, /*ignoreLevelRestriction=*/true); // to ensure glowies if no other enchs
 				meta.addItemFlags (ItemFlag.HIDE_ENCHANTS);
 			}
 		} else {
@@ -496,6 +501,10 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				if (lore.contains (trigger))
 					return true;
 			}
+		}
+		if (item.containsEnchantment (Enchantment.getById(UB_ID))) {
+			//*DEBUG*/log.info ("Found UB enchantment; protect it");
+			return true;
 		}
 		return false;
 	}
@@ -645,10 +654,9 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		return meta;
 	}
 	
-	// Needs work
 	@EventHandler (ignoreCancelled = true)
 	void enchantMonitor (EnchantItemEvent event) {
-		Player player = event.getEnchanter();
+		final Player player = event.getEnchanter();
 		ItemStack item = event.getItem();
 		if (item.getType() == Material.BOOK)
 			item.setType (Material.ENCHANTED_BOOK);
@@ -657,7 +665,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if ( !player.hasPermission ("unbreakable.ench"))
 			return;
 		if ( !isEnchantingInWorld (player.getLocation().getWorld().getName())) {
-			log.info ("enchanting Unbreakable in " + player.getLocation().getWorld().getName() + " is off");
+			// log.info ("enchanting Unbreakable in " + player.getLocation().getWorld().getName() + " is off");
 			return;
 		}
 		//* DEBUG */ log.info ("enchantMonitor (" + item + ")");
@@ -674,10 +682,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			//* DEBUG */ log.info ("enchantMonitor: next enchant Unbreakable = " + substituteUB);
 
 			if (item.getType()== Material.ENCHANTED_BOOK) {
-				// Decide whether or not to change the enchantment on the book to mine...			
-				if (substituteUB) {
+				// Decide whether or not to change the enchantment on the book to mine...		
+				// TODO: with enchantment name display, need to get my name into Bukkit structures so it appears
+				//       Currently only appears in level 1 row. Why not 3? 	
+				if (substituteUB || ench.getId() == UB_ID) {
 					added = true;
 					item = storeUnbreakable (player, item);
+					/*DEBUG*/log.info ("Stored unbreakable in book, " + item);
 					event.setExpLevelCost (UNBREAKABLE.getMinXP (1));
 					break;  // only one enchant, but what if this was second??
 				} /** Already getting added by NMS;
@@ -721,9 +732,33 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				else**/
 				setGlowie (item, true);
 			}
-			((EnchantingInventory)event.getInventory()).setItem (item); // unsafe, but we know it's enchantment
-			log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
-					  "{0} just enchanted a {1} with UNBREAKABLE", event.getEnchanter().getName(), item.getType() ));
+			//*DEBUG*/log.info ("returning enchanted item: " + item);
+			/* Can't run within same callback
+			   ((EnchantingInventory)event.getInventory()).setItem (item); // unsafe, but we know it's enchantment
+			 */
+			final ItemStack result = item.clone();
+			class EnchantRunner extends BukkitRunnable {
+				@Override
+				public void run() {
+					final InventoryView inv = player.getOpenInventory();
+					
+					if ( !player.isOnline()) {
+						log.warning (language.get (player, "loggedoff", "{0} logged off before we could give him his unbreakable {1}", player.getName(), result.getType()));
+						return;
+					} 
+					else if (inv == null || (inv.getType() != InventoryType.ENCHANTING)) {
+						log.warning (player.getName()  + " closed table before we could give him his unbreakable " + result.getType());
+						return;
+					} 
+					// addUnbreakable just to be sure; regular enchanting seems to remove UB
+					//*DEBUG*/log.info ("returning enchanted item should have UB: " + result);
+					((EnchantingInventory)inv.getTopInventory()).setItem (addUnbreakable (result));
+					log.info (language.get (Bukkit.getConsoleSender(), "enchanted", 
+					  "{0} just enchanted a {1} with UNBREAKABLE", player.getName(), result.getType() ));
+
+				}
+			}
+			(new EnchantRunner()).runTaskLater(this,1);	
 		}
 	}
 
@@ -901,7 +936,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 							return;
 						}
 						makeUnbreakable = addUnbreakable (makeUnbreakable);
-						log.info ("Saved split unbreakable " +  makeUnbreakable.getType() + " for " + player.getName());
+						// log.info ("Saved split unbreakable " +  makeUnbreakable.getType() + " for " + player.getName());
 					}
 				}
 				(new RightclickRunner()).runTaskLater(this, 1);	// one tic should be long enough to destroy item
@@ -933,7 +968,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			// 0 is left slot of Anvil
 			if (isRepairable (slot0))
 				tool = slot0;
-			// log.info ("Found book: " + book + "; tool: " + tool);
+			//log.info ("Found book: " + book + "; tool: " + tool);
 		}
 
 		if (book != null && tool != null && isPlace)
@@ -942,7 +977,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			if (((EnchantmentStorageMeta)book.getItemMeta()).hasStoredEnchant (OB_Unbreakable) ||
 				book.containsEnchantment (OB_Unbreakable) )
 			{
-				final ItemStack slot0 = tool, slot1 = book;
+				final ItemStack slot0 = tool, slot1 = book.clone(); // must clone with taskRunner
 				tool = tool.clone(); // make sure we dont change what's in the anvil, in case it's taken back
 				/**if (supportSetGlow)
 					tool.getItemMeta().setGlow (true);
@@ -951,7 +986,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					
 				final ItemStack unbreakableItem = addUnbreakable (tool);
 				final Player player = (Player)human; 
-				
+								
 				if (!(human instanceof Player)) {
 					log.warning (human + " clicked on anvil, not a Player");
 					return;
@@ -962,7 +997,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					return;
 				}
 				
-				class EnchantRunner extends BukkitRunnable {
+				class AnvilEnchantRunner extends BukkitRunnable {
 					@Override
 					public void run() {
 						if (unbreakableItem == null)
@@ -986,7 +1021,8 @@ public class Unbreakable extends JavaPlugin implements Listener {
 							stop = true;
 						}
 						if (aInventory.getItem (1) == null || !aInventory.getItem (1).isSimilar (slot1)) {
-							//*DEBUG*/log.info ("removed book before enchant occurred");
+							//*DEBUG*/log.info ("removed book before enchant occurred; found " + aInventory.getItem (1));
+							//*DEBUG*/log.info ("which is " + (!(aInventory.getItem (1).isSimilar (slot1)) ? "NOT ":"") + "similar to "+ slot1);
 							stop = true;
 						}
 						if (pInventory.getCursor() != null && pInventory.getCursor().getType() != Material.AIR) {
@@ -1020,23 +1056,30 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					}
 				}
 				if (player != null)
-					(new EnchantRunner()).runTaskLater(this, getConfig().getInt ("Anvil enchant delay sec") * 20);	
+					(new AnvilEnchantRunner()).runTaskLater(this, getConfig().getInt ("Anvil enchant delay sec") * 20);	
 			}
 			else {
 				// log.info ("No Unbreakable in: " + ((EnchantmentStorageMeta)book.getItemMeta()).getStoredEnchants().keySet());
 			}
 			
 		// Check for adding enchant to already Unbreakable item
-		} else if (isPickup && event.getSlotType() == SlotType.RESULT) {
+		} else if (isPickup && event.getSlotType() == SlotType.RESULT || //RESULT means crafting/oven result
+						isPickup && event.getSlotType() == SlotType.CRAFTING && event.getRawSlot() == 0) 
+		{ 
 			ItemStack result = event.getCurrentItem().clone(); // avoid race condition
+			final InventoryType expectedInv = (event.getSlotType() == SlotType.RESULT ? 
+				InventoryType.ANVIL : InventoryType.ENCHANTING);
 		
-			// log.info ("Picked up result " + result);
+			//*DEBUG*/ log.info ("Picked up result " + result);
 			ItemMeta meta = result.getItemMeta();
-			if (isUnbreakable (result) && meta.hasEnchant (Enchantment.DURABILITY) && meta.getEnchants().size() > 1)
+			if ((isUnbreakable (result) && meta.hasEnchant (Enchantment.DURABILITY) && meta.getEnchants().size() > 1) ||
+										   meta.hasEnchant (Enchantment.getById(UB_ID)) )
 			{ // have more than one enchant and don't need Durability for glowies
 				meta.removeEnchant (Enchantment.DURABILITY);
 				meta.removeItemFlags (ItemFlag.HIDE_ENCHANTS);
 				result.setItemMeta (meta);
+				if (meta.hasEnchant (Enchantment.getById(UB_ID)))
+					result = addUnbreakable (result); // just to be sure
 
 				final ItemStack unbreakableItem = result;
 				final Player player = (Player)human; 
@@ -1045,13 +1088,6 @@ public class Unbreakable extends JavaPlugin implements Listener {
 					log.warning (human + " clicked on anvil, not a Player");
 					return;
 				}
-				/** Don't check cause not adding it.
-				else if ( !player.hasPermission ("unbreakable.anvil")) {
-					player.sendMessage (language.get (player, "noPerm", 
-										"You don't have permission to enchant with " + chatName + " books"));
-					return;
-				}
-				***/
 
 				class MetaRunner extends BukkitRunnable {
 					@Override
@@ -1062,11 +1098,11 @@ public class Unbreakable extends JavaPlugin implements Listener {
 							log.info (language.get (player, "loggedoff", "{0} logged off before we could give him his unbreakable {1}", player.getName(), unbreakableItem.getType()));
 							return;
 						}
-						if (player.getOpenInventory().getTopInventory().getType() != InventoryType.ANVIL) {
-							/*DEBUG*/log.info (player.getName() + " closed inventory before enchant occurred");
+						if (player.getOpenInventory().getTopInventory().getType() != expectedInv) 
+						{
+							//*DEBUG*/log.info (player.getName() + " closed inventory before enchant occurred");
 							return;
 						}
-						AnvilInventory aInventory = (AnvilInventory)player.getOpenInventory().getTopInventory();
 						InventoryView pInventory = player.getOpenInventory();
 
 						// Make sure we should still do this, that result still ready
@@ -1077,7 +1113,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 						// Execute swap of item without Unbreaking and HIDE_ENCHANTs
 						pInventory.setCursor (unbreakableItem);
 						
-						// log.info ("Cleared Unbreaking off of a " + unbreakableItem.getType() + " with UNBREAKABLE");
+						//log.info ("Cleared Unbreaking off of a " + unbreakableItem.getType() + " with UNBREAKABLE");
 					}
 				}
 				if (player != null)
@@ -1198,7 +1234,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		{
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
-		} else if (serverVer.startsWith ("1.9") || serverVer.startsWith ("1.10"))
+		} else if (serverVer.startsWith ("1.9") || serverVer.startsWith ("1.10") || serverVer.startsWith ("1.11"))
 			log.warning (language.get (Bukkit.getConsoleSender(), "failSpigot", "unable to run; since 1.9+ require Spigot"));
 		 else
 			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with {0}", compatibleVersions)); // was 2-R0.2/3

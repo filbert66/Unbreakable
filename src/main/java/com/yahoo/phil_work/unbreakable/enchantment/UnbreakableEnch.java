@@ -13,7 +13,8 @@ package com.yahoo.phil_work.unbreakable;
 public interface UnbreakableEnch {
 
 	// public UnbreakableEnch (int id, int weight);
-	
+	// for now: public org.bukkit.enchantments.Enchantment getBukkitEnchantment ();
+
 	//public static boolean alreadyRegistered (int id);
 	
 	// ONLY call if alreadyRegistered() == true

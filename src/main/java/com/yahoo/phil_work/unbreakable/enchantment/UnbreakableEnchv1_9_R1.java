@@ -35,6 +35,7 @@ public class UnbreakableEnchv1_9_R1 extends Enchantment implements UnbreakableEn
 	private static final String keyName = "unbreakable";
 	private int id;
 	private int unbreakingId = 0;
+	private org.bukkit.enchantments.Enchantment OB_Enchantment;
 	
 	static final private Enchantment.Rarity getRarity (int r) {
 		for (Enchantment.Rarity rarity : Enchantment.Rarity.values()) 
@@ -54,13 +55,16 @@ public class UnbreakableEnchv1_9_R1 extends Enchantment implements UnbreakableEn
 		unbreakingId = Enchantment.getId (Enchantment.enchantments.get (new MinecraftKey ("unbreaking")));
 
 		/*
-		 *  below duplicates static Enchangement.f()
+		 *  below duplicates static Enchantment.f()
 		 */
         Enchantment.enchantments.a(id, new MinecraftKey(keyName), this);
 		// need to make sure that is AcceptingRegistrations
-        org.bukkit.enchantments.Enchantment.registerEnchantment(new org.bukkit.craftbukkit.v1_9_R1.enchantments.CraftEnchantment(this));
+        org.bukkit.enchantments.Enchantment.registerEnchantment(OB_Enchantment = new org.bukkit.craftbukkit.v1_9_R1.enchantments.CraftEnchantment(this));
 	}
-
+	public org.bukkit.enchantments.Enchantment getBukkitEnchantment () {
+		return OB_Enchantment;
+	}
+	
 	public static boolean alreadyRegistered (int id) {
 		try {
 			Enchantment e = Enchantment.c(id);  // calls enchantments.getId()

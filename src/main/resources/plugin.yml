@@ -9,7 +9,7 @@
 
 name: Unbreakable
 main: com.yahoo.phil_work.unbreakable.Unbreakable
-version: 4.7
+version: 4.8.2
 author: filbert66
 description: Stops armor and tools from breaking
 softdepend: [LanguagesAPI]
@@ -56,5 +56,5 @@ commands:
     description: enchants held item with Unbreakable
     usage: Use when holding repairable item with sufficient XP 
     permission: unbreakable.cmd
-    permission-message: You do not have permission to use /<command>>
+    permission-message: You do not have permission to use /<command>
   
