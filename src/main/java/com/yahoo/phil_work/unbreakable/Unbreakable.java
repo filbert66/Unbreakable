@@ -35,6 +35,7 @@
  *  29 Jun 2016 : PSW : Added "/unbk off|false" support; fix NPE isProtectedByLore().
  *  29 Oct 2016 : PSW : Add "Protect elytra" and "Protect shields" or just item ID??
  *  14 Dec 2016 : PSW : 1.11 compatibility
+ *  13 Sep 2017 : PSW : 1.12 compatibility
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -60,7 +61,6 @@ import java.util.HashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.command.defaults.EnchantCommand;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.inventory.*;
@@ -106,7 +106,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 	static public Class class_NMSItemStack;
 	static private Class<?> class_NBTTagCompound;
 	static private String versionPrefix = "";
-	static private final String compatibleVersions = "1.7, 1.8, 1.9, 1.10, 1.11"; 
+	static private final String compatibleVersions = "1.7, 1.8, 1.9, 1.10, 1.11, 1.12"; 
 	static private boolean supportSetGlow = false;
 	static private boolean supportSpigotUnbreakable = false;
 	static { try {	
@@ -1234,7 +1234,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		{
 			getServer().getPluginManager().registerEvents ((Listener)this, this);
 			log.info (language.get (Bukkit.getConsoleSender(), "enabled", "Unbreakable in force, protecting tools and armor; by Filbert66"));
-		} else if (serverVer.startsWith ("1.9") || serverVer.startsWith ("1.10") || serverVer.startsWith ("1.11"))
+		} else if (serverVer.startsWith ("1.9") || serverVer.startsWith ("1.1"))
 			log.warning (language.get (Bukkit.getConsoleSender(), "failSpigot", "unable to run; since 1.9+ require Spigot"));
 		 else
 			log.warning (language.get (Bukkit.getConsoleSender(), "failBukkit", "unable to run; only compatible with {0}", compatibleVersions)); // was 2-R0.2/3
