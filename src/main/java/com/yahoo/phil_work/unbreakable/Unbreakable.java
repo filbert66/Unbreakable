@@ -36,6 +36,7 @@
  *  29 Oct 2016 : PSW : Add "Protect elytra" and "Protect shields" or just item ID??
  *  14 Dec 2016 : PSW : 1.11 compatibility
  *  13 Sep 2017 : PSW : 1.12 compatibility
+ *  15 Oct 2017 : PSW : Added SUPPORT_ELTYRA for backward compat.
  * TODO:
  *   			:     : Use new setGlow(boolean) methods to ItemMeta, BUKKIT-4767
  */
@@ -121,6 +122,13 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			SUPPORT_SHIELD = (Material.valueOf ("SHIELD") != null);
 		} catch (Exception ex) {
 			SUPPORT_SHIELD = false;
+		}
+	}
+	static private boolean SUPPORT_ELYTRA;
+	static { try { 	
+			SUPPORT_ELYTRA = (Material.valueOf ("ELYTRA") != null);
+		} catch (Exception ex) {
+			SUPPORT_ELYTRA = false;
 		}
 	}
 	// ..and my own version-dependent classes & methods
@@ -297,7 +305,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		else if (versionPrefix.startsWith ("v1_9") || versionPrefix.startsWith ("v1_10")) {
 			log.severe ("Requires Spigot from 1.9+; no guarantees this will work");
 			class_NMSItemStack_removeNameMethod = "r";			//fail soft
-		} else if (versionPrefix.startsWith ("v1_11"))  { // not really needed now with supportSpigotUnbreakable
+		} else if (versionPrefix.startsWith ("v1_1"))  { // not really needed now with supportSpigotUnbreakable
 			class_NMSItemStack_removeNameMethod = "s";
 			class_NMSItemStack_setNameMethod = "g";
 		} else {
@@ -523,7 +531,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			return getConfig().getBoolean ("Protect tools"); //includes shields
 		else if (MaterialCategory.isArmor(m))
 			return getConfig().getBoolean ("Protect armor");
-		else if (m == Material.ELYTRA)
+		else if (SUPPORT_ELYTRA && m == Material.ELYTRA)
 			return getConfig().getBoolean ("Protect elytra");
 		else 
 			return false;
@@ -552,7 +560,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 			log.fine (player.getName() + " doesn't have unbreakable.tools");
 			return false;
 		}
-		else if (m == Material.ELYTRA && player.isPermissionSet ("unbreakable.elytra") && !player.hasPermission ("unbreakable.elytra")) {
+		else if (SUPPORT_ELYTRA && m == Material.ELYTRA && player.isPermissionSet ("unbreakable.elytra") && !player.hasPermission ("unbreakable.elytra")) {
 			log.fine (player.getName() + " doesn't have unbreakable.elytra");
 			return false;
 		}		
@@ -812,7 +820,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 		if ((event.getSlotType() == SlotType.ARMOR && isPlace) ||
 		 	(inv.getType() == InventoryType.CRAFTING && isPlace && event.getRawSlot() == SHIELD_CLICK_SLOT ) || 
 		    (inv.getType() == InventoryType.CRAFTING && event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY && 
-		     (MaterialCategory.isArmor (m) || m == Material.ELYTRA || (SUPPORT_SHIELD && m == Material.SHIELD))
+		     (MaterialCategory.isArmor (m) || (SUPPORT_ELYTRA && m == Material.ELYTRA) || (SUPPORT_SHIELD && m == Material.SHIELD))
 		    ))
 		{
 			// log.info ("Armor change " + action + " in slot " + event.getSlot() + " curr item " + event.getCurrentItem() + " with " + event.getCursor() + " on cursor");
@@ -898,7 +906,7 @@ public class Unbreakable extends JavaPlugin implements Listener {
 				}
 				
 				if (isProtectedItem (p, item) && !isUnbreakable(item) && 
-					(getConfig().getBoolean ("Unbreakable on hold") || item.getType() == Material.ELYTRA) )
+					(getConfig().getBoolean ("Unbreakable on hold") || (SUPPORT_ELYTRA && item.getType() == Material.ELYTRA)) )
 					// Elytra never breaks, so consider on hold/equip to always be true
 					(new armorFixer()).runTaskLater(this,1);		
 			}
